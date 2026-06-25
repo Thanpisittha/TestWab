@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Carrier Only)</title>
+  <title>BK05 — Digital Twin (Cerrier Highlight)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -131,9 +131,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// ── 🛠️ แมปชื่อก้อนวัตถุ carrier ตามชื่อใน Blender ──
+// ── 🛠️ จุดแก้ไขที่ 1: เปลี่ยนมาแมปตามชื่อจริงขวาบนใน Blender ของคุณ 'Cerrier' ──
 const PART_NAMES = {
-  carrier_tape: 'carrier', 
+  carrier_tape: 'Cerrier', 
 };
 
 // ── FSM ลำดับการทำงานเครื่อง ──
@@ -142,7 +142,7 @@ const STATES = [
   {id:'READY',       action:'Waiting for Start'},
   {id:'SEAL',        action:'Heat + Pressure'},
   {id:'SEAL_CHECK',  action:'Seal OK?'},
-  {id:'INDEX',       action:'Feed Carrier Tape'}, // สเตทนี้ carrier จะสไลด์เลื่อน
+  {id:'INDEX',       action:'Feed Cerrier Tape'}, 
   {id:'CHECK_INDEX', action:'Check Position'},
   {id:'LOAD_PART',   action:'Place Component'},
   {id:'VISION',      action:'Inspect Part'},
@@ -175,7 +175,7 @@ const PROB = {SEAL_CHECK:0.99, CHECK_INDEX:0.99, VISION:0.99, CHECK_TEMP:0.95, C
 
 const DUR = {
   INIT:300, READY:500, SEAL:400, SEAL_CHECK:150,
-  INDEX:800, // ตั้งหน่วงเวลาจังหวะเลื่อนรางดำไว้ 800ms
+  INDEX:800, 
   CHECK_INDEX:150, LOAD_PART:250, VISION:250, FEED_COVER:250, CHECK_TEMP:150,
   ROLL:400, COUNT_CHECK:150, STOP:400, ALARM:800,
 };
@@ -195,8 +195,9 @@ const camera = new THREE.PerspectiveCamera(45,1,0.01,1000);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 
-scene.add(new THREE.AmbientLight(0xffffff,0.85));
-const dl = new THREE.DirectionalLight(0xffffff,1.2); dl.position.set(4,6,4); scene.add(dl);
+// ปรับเพิ่มแสงสว่างในฉากขึ้นเล็กน้อย
+scene.add(new THREE.AmbientLight(0xffffff,1.2));
+const dl = new THREE.DirectionalLight(0xffffff,1.5); dl.position.set(4,6,4); scene.add(dl);
 
 function resize(){
   const p=canvas.parentElement;
@@ -232,25 +233,40 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-const hlMat = new THREE.MeshStandardMaterial({color:0x00c9a7,emissive:0x003322,roughness:0.3});
-const alMat = new THREE.MeshStandardMaterial({color:0xf87171,emissive:0x330000,roughness:0.3});
+// ── 🛠️ จุดแก้ไขที่ 2: ปรับแต่ง Material ไฮไลท์เรืองแสงเนีอนให้เห็นชัดเจนขึ้น ──
+const hlMat = new THREE.MeshStandardMaterial({
+  color: 0x00ffcc,       // สีเขียวฟ้านีออนสะท้อนแสง
+  emissive: 0x00aa66,    // สั่งให้ผิววัสดุเรืองแสงในตัวเอง
+  roughness: 0.1,
+  metalness: 0.1
+});
+const alMat = new THREE.MeshStandardMaterial({
+  color: 0xff3333,       // สีแดงนีออนตอน Alarm
+  emissive: 0xcc0000,    // เรืองแสงสีแดงเข้ม
+  roughness: 0.1
+});
 
 function hl(role,mat){const m=meshMap[role];if(m){m.material=mat;}}
-function restoreAll(){Object.keys(meshMap).forEach(r=>{const m=meshMap[r];if(m&&origMat[r])m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();});}
+function restoreAll(){
+  Object.keys(meshMap).forEach(r=>{
+    const m=meshMap[r];
+    if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
+  });
+}
 
-// ── 🎬 ฟังก์ชันขยับวัตถุ carrier ──
+// ── 🎬 ฟังก์ชันอนิเมชันขยับวัตถุ ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
 
   switch(id){
-    // จังหวะ INDEX: สั่งขยับรางดำ carrier สไลด์ตามแนวแกน X
     case 'INDEX':
-      hl('carrier_tape', hlMat); // เปลี่ยนสีไฮไลท์ตอนกำลังวิ่ง
+      // 1. สั่งเปิดไฟไฮไลท์สีเขียวนีออนที่ก้อน Cerrier ทันที
+      hl('carrier_tape', hlMat); 
       
-      // สั่งขยับเลื่อนไปทางแกน X เป็นระยะ -0.15 หน่วยความยาว
+      // 2. สั่งขยับกระตุกไปตามแกน X ระยะ -0.15 หน่วยความยาว
       tw('carrier_tape', new THREE.Vector3(-0.15, 0, 0), 0.35/S, () => {
-        // เมื่อสไลด์ไปสุดแล้ว ให้หน่วงเวลาค้างไว้เล็กน้อย แล้วดึงกลับมาที่เดิม (Reset)
+        // เมื่อเลื่อนไปสุดทางแล้ว ให้ค้างไว้แป๊บนึง แล้วค่อย ๆ สไลด์กลับมาตำแหน่งเดิม (Reset)
         setTimeout(() => {
           ret('carrier_tape', 0.20/S);
         }, 150/S);
@@ -258,6 +274,7 @@ function playAnim(id){
       break;
 
     case 'ALARM':
+      // หากเกิดเหตุขัดข้อง สั่งไฮไลท์ไฟแดงเตือนที่ตัว Cerrier
       hl('carrier_tape', alMat);
       break;
   }
@@ -280,21 +297,32 @@ function animate(){
 }
 animate();
 
-// ── 🚀 แก้ไขตำแหน่งโหลดไฟล์โมเดลตรงนี้ตามโค้ดของคุณแล้ว ──
+// ── โหลดไฟล์โมเดลจากโฟลเดอร์ของคุณ พร้อมฟังก์ชัน Auto-Center และคุมกล้อง ──
 new GLTFLoader().load('./export/Tast.glb', gltf=>{
   scene.add(gltf.scene);
+  
+  gltf.scene.traverse(obj => {
+    if(obj.isMesh) {
+      obj.castShadow = true;
+      obj.receiveShadow = true;
+    }
+  });
+
   const box=new THREE.Box3().setFromObject(gltf.scene);
   const center=box.getCenter(new THREE.Vector3());
   const size=box.getSize(new THREE.Vector3()).length();
   gltf.scene.position.sub(center);
-  camera.position.set(0,size*0.4,size*1.2);
+  camera.position.set(size*0.6, size*0.6, size*1.1);
   controls.target.set(0,0,0);
   controls.update();
+  
   gltf.scene.traverse(obj=>{
     if(!obj.isMesh) return;
+    // ตรวจสอบชื่อวัตถุในโครงสร้าง GLB ให้ตรงกับคำว่า 'Cerrier'
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) reg(role,obj);
   });
+  
   addLog(`GLB loaded — จับคู่เจอชิ้นส่วนวัตถุ [${Object.keys(meshMap).join(', ')}]`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
