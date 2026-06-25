@@ -131,7 +131,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// ── 🛠️ แมปชื่อก้อนวัตถุ carrier เพียงชิ้นเดียวตามชื่อใน Blender ──
+// ── 🛠️ แมปชื่อก้อนวัตถุ carrier ตามชื่อใน Blender ──
 const PART_NAMES = {
   carrier_tape: 'carrier', 
 };
@@ -238,7 +238,7 @@ const alMat = new THREE.MeshStandardMaterial({color:0xf87171,emissive:0x330000,r
 function hl(role,mat){const m=meshMap[role];if(m){m.material=mat;}}
 function restoreAll(){Object.keys(meshMap).forEach(r=>{const m=meshMap[r];if(m&&origMat[r])m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();});}
 
-// ── 🎬 ฟังก์ชันขยับวัตถุ (เหลือเฉพาะ carrier ตัวเดียว) ──
+// ── 🎬 ฟังก์ชันขยับวัตถุ carrier ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -280,8 +280,8 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดลจากตำแหน่งโฟลเดอร์ cad ──
-new GLTFLoader().load('./cad/Export/machine.glb', gltf=>{
+// ── 🚀 แก้ไขตำแหน่งโหลดไฟล์โมเดลตรงนี้ตามโค้ดของคุณแล้ว ──
+new GLTFLoader().load('./export/Tast.glb', gltf=>{
   scene.add(gltf.scene);
   const box=new THREE.Box3().setFromObject(gltf.scene);
   const center=box.getCenter(new THREE.Vector3());
