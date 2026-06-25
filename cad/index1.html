@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>BK05 — Digital Twin (Carrier Only)</title>
+  <script type="importmap">
+    {"imports":{
+      "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
+      "three/addons/":"https://unpkg.com/three@0.158.0/examples/jsm/"
+    }}
+  </script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0a0c0f;--surface:#111318;--surface2:#1a1d24;--border:#2a2d38;
+      --text:#e8eaf0;--muted:#6b7080;--teal:#00c9a7;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
+    }
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
+      display:grid;grid-template-columns:1fr 320px;grid-template-rows:48px 1fr;height:100vh;overflow:hidden}
+    header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:0 16px;
+      background:var(--surface);border-bottom:1px solid var(--border)}
+    .logo{font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--teal)}
+    .htitle{font-size:12px;color:var(--muted)}
+    .hdot{width:8px;height:8px;border-radius:50%;background:#4b5563;margin-left:auto;transition:background .3s}
+    .hdot.run{background:var(--teal);box-shadow:0 0 6px var(--teal)}
+    .hdot.alarm{background:var(--red);box-shadow:0 0 6px var(--red)}
+    #hstatus{font-size:12px;color:var(--muted);margin-left:6px}
+    #canvas-wrap{position:relative;background:#06080a}
+    canvas{display:block;width:100%;height:100%}
+    .overlay{position:absolute;top:12px;left:12px;background:rgba(10,12,15,.88);
+      border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:160px}
+    .ov-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+    .ov-state{font-size:22px;font-weight:700;color:var(--teal);line-height:1.1;transition:color .3s}
+    .ov-state.alarm{color:var(--red)}
+    .ov-desc{font-size:11px;color:var(--muted);margin-top:3px}
+    .anim-tag{position:absolute;bottom:12px;left:12px;background:rgba(251,191,36,.15);
+      border:1px solid var(--amber);border-radius:7px;padding:5px 12px;font-size:11px;color:var(--amber);display:none}
+    .panel{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+    .ctrl{padding:14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+    .btn-row{display:flex;gap:6px}
+    .btn{flex:1;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:11px;
+      font-weight:600;cursor:pointer;background:var(--surface2);color:var(--muted);transition:all .2s}
+    .btn:hover{border-color:var(--teal);color:var(--text)}
+    .btn.primary{background:rgba(0,201,167,.12);color:var(--teal);border-color:var(--teal)}
+    .btn.danger{background:rgba(248,113,113,.12);color:var(--red);border-color:var(--red)}
+    .btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+    .speed-row{display:flex;align-items:center;gap:8px}
+    .slbl{font-size:11px;color:var(--muted);white-space:nowrap}
+    input[type=range]{flex:1;accent-color:var(--teal)}
+    .sval{font-size:11px;color:var(--teal);min-width:22px;text-align:right}
+    .counters{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+    .cnt{flex:1;padding:10px;text-align:center;border-right:1px solid var(--border)}
+    .cnt:last-child{border-right:none}
+    .cnt-val{font-size:18px;font-weight:700;color:var(--teal)}
+    .cnt-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:1px}
+    .sec-title{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:10px 14px 4px}
+    .states{flex:1;overflow-y:auto;padding:0 8px 8px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+    .si{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;margin-bottom:2px;transition:background .2s}
+    .si.active{background:rgba(0,201,167,.1)}
+    .si.visited{background:rgba(255,255,255,.02)}
+    .si.alarm-s{background:rgba(248,113,113,.1)}
+    .si-dot{width:7px;height:7px;border-radius:50%;background:#2a2d38;flex-shrink:0;transition:background .3s}
+    .si.active .si-dot{background:var(--teal);box-shadow:0 0 5px var(--teal)}
+    .si.visited .si-dot{background:var(--purple)}
+    .si.alarm-s .si-dot{background:var(--red);box-shadow:0 0 5px var(--red)}
+    .si-name{font-size:11px;font-weight:600;color:var(--muted);min-width:95px;transition:color .2s}
+    .si.active .si-name{color:var(--teal)}
+    .si.visited .si-name{color:var(--text)}
+    .si.alarm-s .si-name{color:var(--red)}
+    .si-action{font-size:10px;color:var(--muted)}
+    .log-wrap{border-top:1px solid var(--border);height:145px;display:flex;flex-direction:column;flex-shrink:0}
+    .log-hdr{padding:6px 14px;display:flex;justify-content:space-between;align-items:center}
+    .log-clr{font-size:10px;color:var(--muted);cursor:pointer}.log-clr:hover{color:var(--text)}
+    .log-body{flex:1;overflow-y:auto;padding:0 14px 8px;font-family:monospace;font-size:10px;
+      line-height:1.7;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+    .le .ts{color:#4b5563;margin-right:5px}
+    .le.info .ev{color:var(--teal)}.le.warn .ev{color:var(--amber)}.le.err .ev{color:var(--red)}
+  </style>
+</head>
+<body>
+<header>
+  <span class="logo">BK05</span>
+  <span style="color:var(--border)">|</span>
+  <span class="htitle">SMD Reel Packing — Digital Twin</span>
+  <div class="hdot" id="hdot"></div>
+  <span id="hstatus">Idle</span>
+</header>
+
+<div id="canvas-wrap">
+  <canvas id="c"></canvas>
+  <div class="overlay">
+    <div class="ov-label">Current State</div>
+    <div class="ov-state" id="ovState">READY</div>
+    <div class="ov-desc" id="ovDesc">Waiting for Start</div>
+  </div>
+  <div class="anim-tag" id="animTag">⟳ Animating</div>
+</div>
+
+<div class="panel">
+  <div class="ctrl">
+    <div class="btn-row">
+      <button class="btn primary" id="btnStart" onclick="fsmStart()">▶ Start</button>
+      <button class="btn" id="btnPause" onclick="fsmPause()" disabled>⏸ Pause</button>
+      <button class="btn danger" id="btnReset" onclick="fsmReset()" disabled>↺ Reset</button>
+    </div>
+    <div class="speed-row">
+      <span class="slbl">Speed</span>
+      <input type="range" id="spd" min="0.5" max="3" step="0.5" value="1"
+        oninput="speedMul=+this.value;document.getElementById('sval').textContent=this.value+'×'">
+      <span class="sval" id="sval">1×</span>
+    </div>
+  </div>
+  <div class="counters">
+    <div class="cnt"><div class="cnt-val" id="cPacked">0</div><div class="cnt-lbl">Packed</div></div>
+    <div class="cnt"><div class="cnt-val" id="cCycles">0</div><div class="cnt-lbl">Cycles</div></div>
+    <div class="cnt"><div class="cnt-val" id="cAlarm" style="color:var(--red)">0</div><div class="cnt-lbl">Alarms</div></div>
+  </div>
+  <div class="sec-title">FSM States</div>
+  <div class="states" id="statesList"></div>
+  <div class="log-wrap">
+    <div class="log-hdr">
+      <span class="sec-title" style="padding:0">Event Log</span>
+      <span class="log-clr" onclick="document.getElementById('logBody').innerHTML=''">Clear</span>
+    </div>
+    <div class="log-body" id="logBody"></div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── 🛠️ แมปชื่อก้อนวัตถุ carrier เพียงชิ้นเดียวตามชื่อใน Blender ──
+const PART_NAMES = {
+  carrier_tape: 'carrier', 
+};
+
+// ── FSM ลำดับการทำงานเครื่อง ──
+const STATES = [
+  {id:'INIT',        action:'Initialize'},
+  {id:'READY',       action:'Waiting for Start'},
+  {id:'SEAL',        action:'Heat + Pressure'},
+  {id:'SEAL_CHECK',  action:'Seal OK?'},
+  {id:'INDEX',       action:'Feed Carrier Tape'}, // สเตทนี้ carrier จะสไลด์เลื่อน
+  {id:'CHECK_INDEX', action:'Check Position'},
+  {id:'LOAD_PART',   action:'Place Component'},
+  {id:'VISION',      action:'Inspect Part'},
+  {id:'FEED_COVER',  action:'Feed Cover Tape'},
+  {id:'CHECK_TEMP',  action:'Temperature Ready?'},
+  {id:'ROLL',        action:'Wind Reel (Collect)'},
+  {id:'COUNT_CHECK', action:'Count Done?'},
+  {id:'STOP',        action:'Done → READY'},
+  {id:'ALARM',       action:'Stop Machine'},
+];
+
+const TR = {
+  INIT:        {auto:'READY'},
+  READY:       {auto:'SEAL'},
+  SEAL:        {auto:'SEAL_CHECK'},
+  SEAL_CHECK:  {OK:'INDEX',      NG:'ALARM'},
+  INDEX:       {auto:'CHECK_INDEX'},
+  CHECK_INDEX: {OK:'LOAD_PART', NG:'ALARM'},
+  LOAD_PART:   {auto:'VISION'},
+  VISION:      {OK:'FEED_COVER',NG:'ALARM'},
+  FEED_COVER:  {auto:'CHECK_TEMP'},
+  CHECK_TEMP:  {OK:'ROLL',       NG:'CHECK_TEMP'},
+  ROLL:        {auto:'COUNT_CHECK'},
+  COUNT_CHECK: {OK:'STOP',       NG:'SEAL'},
+  STOP:        {auto:'READY'},
+  ALARM:       {auto:'INIT'},
+};
+
+const PROB = {SEAL_CHECK:0.99, CHECK_INDEX:0.99, VISION:0.99, CHECK_TEMP:0.95, COUNT_CHECK:0.15};
+
+const DUR = {
+  INIT:300, READY:500, SEAL:400, SEAL_CHECK:150,
+  INDEX:800, // ตั้งหน่วงเวลาจังหวะเลื่อนรางดำไว้ 800ms
+  CHECK_INDEX:150, LOAD_PART:250, VISION:250, FEED_COVER:250, CHECK_TEMP:150,
+  ROLL:400, COUNT_CHECK:150, STOP:400, ALARM:800,
+};
+
+window.speedMul = 1;
+const ms = id => (DUR[id]||400) / speedMul;
+
+// ── Three.js Setup ──
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x06080a);
+const camera = new THREE.PerspectiveCamera(45,1,0.01,1000);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+
+scene.add(new THREE.AmbientLight(0xffffff,0.85));
+const dl = new THREE.DirectionalLight(0xffffff,1.2); dl.position.set(4,6,4); scene.add(dl);
+
+function resize(){
+  const p=canvas.parentElement;
+  renderer.setSize(p.clientWidth,p.clientHeight,false);
+  camera.aspect=p.clientWidth/p.clientHeight;
+  camera.updateProjectionMatrix();
+}
+resize();
+new ResizeObserver(resize).observe(canvas.parentElement);
+
+// ── Mesh Registry ──
+const meshMap={}, origPos={}, origMat={};
+function reg(role,mesh){
+  meshMap[role]=mesh;
+  origPos[role]=mesh.position.clone();
+  origMat[role]=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
+}
+
+// ── Tween & Animation System ──
+const tweens=[];
+function tw(role,delta,durSec,onDone=null){
+  const mesh=meshMap[role]; if(!mesh) return;
+  const i=tweens.findIndex(t=>t.role===role); if(i>-1) tweens.splice(i,1);
+  tweens.push({role,mesh,from:mesh.position.clone(),
+    to:mesh.position.clone().add(delta),dur:durSec,elapsed:0,onDone});
+  document.getElementById('animTag').style.display='block';
+}
+function ret(role,durSec=0.18){
+  const mesh=meshMap[role]; if(!mesh||!origPos[role]) return;
+  const i=tweens.findIndex(t=>t.role===role); if(i>-1) tweens.splice(i,1);
+  tweens.push({role,mesh,from:mesh.position.clone(),to:origPos[role].clone(),
+    dur:durSec,elapsed:0,onDone:null});
+}
+function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
+
+const hlMat = new THREE.MeshStandardMaterial({color:0x00c9a7,emissive:0x003322,roughness:0.3});
+const alMat = new THREE.MeshStandardMaterial({color:0xf87171,emissive:0x330000,roughness:0.3});
+
+function hl(role,mat){const m=meshMap[role];if(m){m.material=mat;}}
+function restoreAll(){Object.keys(meshMap).forEach(r=>{const m=meshMap[r];if(m&&origMat[r])m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();});}
+
+// ── 🎬 ฟังก์ชันขยับวัตถุ (เหลือเฉพาะ carrier ตัวเดียว) ──
+function playAnim(id){
+  restoreAll();
+  const S = speedMul;
+
+  switch(id){
+    // จังหวะ INDEX: สั่งขยับรางดำ carrier สไลด์ตามแนวแกน X
+    case 'INDEX':
+      hl('carrier_tape', hlMat); // เปลี่ยนสีไฮไลท์ตอนกำลังวิ่ง
+      
+      // สั่งขยับเลื่อนไปทางแกน X เป็นระยะ -0.15 หน่วยความยาว
+      tw('carrier_tape', new THREE.Vector3(-0.15, 0, 0), 0.35/S, () => {
+        // เมื่อสไลด์ไปสุดแล้ว ให้หน่วงเวลาค้างไว้เล็กน้อย แล้วดึงกลับมาที่เดิม (Reset)
+        setTimeout(() => {
+          ret('carrier_tape', 0.20/S);
+        }, 150/S);
+      });
+      break;
+
+    case 'ALARM':
+      hl('carrier_tape', alMat);
+      break;
+  }
+}
+
+// ── Render Loop ──
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=clock.getDelta();
+  controls.update();
+  for(let i=tweens.length-1;i>=0;i--){
+    const t=tweens[i]; t.elapsed+=dt;
+    const p=Math.min(t.elapsed/t.dur,1), ep=ease(p);
+    t.mesh.position.lerpVectors(t.from,t.to,ep);
+    if(p>=1){if(t.onDone)t.onDone();tweens.splice(i,1);}
+  }
+  if(tweens.length===0) document.getElementById('animTag').style.display='none';
+  renderer.render(scene,camera);
+}
+animate();
+
+// ── โหลดไฟล์โมเดลจากตำแหน่งโฟลเดอร์ cad ──
+new GLTFLoader().load('./cad/Export/machine.glb', gltf=>{
+  scene.add(gltf.scene);
+  const box=new THREE.Box3().setFromObject(gltf.scene);
+  const center=box.getCenter(new THREE.Vector3());
+  const size=box.getSize(new THREE.Vector3()).length();
+  gltf.scene.position.sub(center);
+  camera.position.set(0,size*0.4,size*1.2);
+  controls.target.set(0,0,0);
+  controls.update();
+  gltf.scene.traverse(obj=>{
+    if(!obj.isMesh) return;
+    const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
+    if(role) reg(role,obj);
+  });
+  addLog(`GLB loaded — จับคู่เจอชิ้นส่วนวัตถุ [${Object.keys(meshMap).join(', ')}]`,'info');
+},null,err=>addLog('GLB error: '+err.message,'err'));
+
+// ── UI Generation ──
+const sl=document.getElementById('statesList');
+STATES.forEach(s=>{
+  const el=document.createElement('div');
+  el.className='si';el.id='si_'+s.id;
+  el.innerHTML=`<div class="si-dot"></div><span class="si-name">${s.id}</span><span class="si-action">${s.action}</span>`;
+  sl.appendChild(el);
+});
+
+function addLog(msg,type='info'){
+  const b=document.getElementById('logBody');
+  const ts=new Date().toTimeString().slice(0,8);
+  const el=document.createElement('div');
+  el.className='le '+type;
+  el.innerHTML=`<span class="ts">${ts}</span><span class="ev">${msg}</span>`;
+  b.appendChild(el);b.scrollTop=b.scrollHeight;
+}
+
+// ── FSM Engine ──
+let current='READY',running=false,paused=false,timer=null;
+let packed=0,cycles=0,alarms=0;
+
+function setState(id){
+  document.querySelectorAll('.si.active,.si.alarm-s').forEach(e=>{
+    e.classList.remove('active','alarm-s');e.classList.add('visited');
+  });
+  current=id;
+  const el=document.getElementById('si_'+id);
+  if(el){el.classList.remove('visited');el.classList.add(id==='ALARM'?'alarm-s':'active');el.scrollIntoView({block:'nearest',behavior:'smooth'});}
+  const s=STATES.find(x=>x.id===id);
+  document.getElementById('ovState').textContent=id;
+  document.getElementById('ovState').className='ov-state'+(id==='ALARM'?' alarm':'');
+  document.getElementById('ovDesc').textContent=s?.action||'';
+  const dot=document.getElementById('hdot'),hs=document.getElementById('hstatus');
+  if(!running){dot.className='hdot';hs.textContent='Idle';}
+  else if(id==='ALARM'){dot.className='hdot alarm';hs.textContent='ALARM';}
+  else{dot.className='hdot run';hs.textContent='Running';}
+  
+  playAnim(id);
+  
+  addLog('→ '+id+(s?' : '+s.action:''),id==='ALARM'?'err':'info');
+  if(id==='ROLL') {packed++;document.getElementById('cPacked').textContent=packed;}
+  if(id==='STOP') {cycles++;document.getElementById('cCycles').textContent=cycles;}
+  if(id==='ALARM'){alarms++;document.getElementById('cAlarm').textContent=alarms;}
+  if(!running||paused) return;
+  const tr=TR[id]; if(!tr) return;
+  if(tr.auto){
+    timer=setTimeout(()=>advance('auto'),ms(id));
+  } else {
+    const prob=PROB[id]??0.9;
+    const result=Math.random()<prob?'OK':'NG';
+    timer=setTimeout(()=>advance(result),ms(id));
+  }
+}
+
+function advance(sig){
+  if(!running||paused) return;
+  clearTimeout(timer);
+  const tr=TR[current]; if(!tr) return;
+  const next=tr[sig]||tr.auto;
+  if(next) setState(next);
+}
+
+window.fsmStart=function(){
+  if(running) return;
+  running=true;paused=false;
+  document.getElementById('btnStart').disabled=true;
+  document.getElementById('btnPause').disabled=false;
+  document.getElementById('btnReset').disabled=false;
+  addLog('▶ BK05 Start เรียบร้อย','info');
+  setState('INIT');
+};
+window.fsmPause=function(){
+  if(!running) return;
+  paused=!paused;clearTimeout(timer);
+  const btn=document.getElementById('btnPause');
+  btn.textContent=paused?'▶ Resume':'⏸ Pause';
+  document.getElementById('hdot').className=paused?'hdot':'hdot run';
+  document.getElementById('hstatus').textContent=paused?'Paused':'Running';
+  addLog(paused?'⏸ Paused':'▶ Resumed','warn');
+  if(!paused){
+    const tr=TR[current];if(!tr)return;
+    if(tr.auto)timer=setTimeout(()=>advance('auto'),ms(current));
+    else{const p=PROB[current]??0.9;const r=Math.random()<p?'OK':'NG';timer=setTimeout(()=>advance(r),ms(current));}
+  }
+};
+window.fsmReset=function(){
+  clearTimeout(timer);running=false;paused=false;
+  restoreAll();tweens.length=0;
+  Object.keys(meshMap).forEach(role=>{
+    const m=meshMap[role];
+    if(m&&origPos[role]){m.position.copy(origPos[role]);m.rotation.set(0,0,0);}
+  });
+  document.getElementById('btnStart').disabled=false;
+  document.getElementById('btnPause').disabled=true;
+  document.getElementById('btnPause').textContent='⏸ Pause';
+  document.getElementById('btnReset').disabled=true;
+  document.getElementById('hdot').className='hdot';
+  document.getElementById('hstatus').textContent='Idle';
+  document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','visited','alarm-s'));
+  document.getElementById('ovState').textContent='READY';
+  document.getElementById('ovState').className='ov-state';
+  document.getElementById('ovDesc').textContent='Waiting for Start';
+  current='READY';addLog('↺ Reset ระบบ','warn');
+};
+</script>
+</body>
+</html>
