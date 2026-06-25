@@ -265,7 +265,7 @@ function playAnim(id){
       hl('carrier_tape', hlMat); 
       
       // 2. สั่งขยับกระตุกไปตามแกน X ระยะ -0.15 หน่วยความยาว
-      tw('carrier_tape', new THREE.Vector3(-0.15, 0, 0), 0.35/S, () => {
+      tw('carrier_tape', new THREE.Vector3(-10, 0, 0), 0.50/S, () => {
         // เมื่อเลื่อนไปสุดทางแล้ว ให้ค้างไว้แป๊บนึง แล้วค่อย ๆ สไลด์กลับมาตำแหน่งเดิม (Reset)
         setTimeout(() => {
           ret('carrier_tape', 0.20/S);
