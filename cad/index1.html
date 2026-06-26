@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Fix Reset Orientation)</title>
+  <title>BK05 — Digital Twin (Cumulative & Roll Rotation)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -136,10 +136,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// ── 🛠️ แมปชื่อวัตถุจาก Blender (เพิ่มตัวม้วนฟีดขนาดใหญ่สีแดง Roll1) ──
 const PART_NAMES = {
   carrier_tape: 'Cerrier', 
+  roller_feed:  'Roll1', // ผูกม้วนสีแดงเข้ากับระบบบอร์ดคอนโทรล
 };
 
+// ── FSM ลำดับการทำงานเครื่อง ──
 const STATES = [
   {id:'INIT',        action:'Initialize'},
   {id:'READY',       action:'Waiting for Start'},
@@ -215,7 +218,7 @@ const meshMap={}, origPos={}, origMat={};
 function reg(role,mesh){
   meshMap[role]=mesh;
   origPos[role]=mesh.position.clone();
-  mesh._origRot=mesh.rotation.clone(); // 🌟 จำค่ามุมเอียงองศาแท้จากไฟล์ GLB ไว้ที่นี่
+  mesh._origRot=mesh.rotation.clone(); // บันทึกมุมเอียงแท้จริงจากโครงสร้างไฟล์ Blender ไว้อย่างแน่นหนา
   origMat[role]=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
 }
 
@@ -236,6 +239,27 @@ function tw(role,delta,durSec,onDone=null){
   });
   document.getElementById('animTag').style.display='block';
 }
+
+// ฟังก์ชันรองรับระบบการควบคุมการหมุนชิ้นงาน (Local Animation)
+function twRot(role,deltaRot,durSec,axis='z',onDone=null){
+  const mesh=meshMap[role]; if(!mesh) return;
+  const key=role+'_r';
+  const i=tweens.findIndex(t=>t.role===key); if(i>-1) tweens.splice(i,1);
+  
+  tweens.push({
+    role: key,
+    mesh,
+    fromRot: mesh.rotation[axis],
+    toRot: mesh.rotation[axis] + deltaRot,
+    isRot: true,
+    rotAxis: axis,
+    dur: durSec,
+    elapsed: 0,
+    onDone
+  });
+  document.getElementById('animTag').style.display='block';
+}
+
 function ret(role,durSec=0.18){
   const mesh=meshMap[role]; if(!mesh||!origPos[role]) return;
   const i=tweens.findIndex(t=>t.role===role); if(i>-1) tweens.splice(i,1);
@@ -265,7 +289,7 @@ function restoreAll(){
   });
 }
 
-// ── ฟังก์ชันควบคุมอนิเมชันวัตถุ ──
+// ── 🎬 ฟังก์ชันควบคุมอนิเมชันวัตถุ (Cerrier เลื่อน + Roll1 หมุนกลิ้งสัมพันธ์กัน) ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -273,11 +297,16 @@ function playAnim(id){
   switch(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
-      // ขยับเลื่อนไปตามแนวหน้า-หลัง (แกน Z) ทีละ 20 ซม.
+      
+      // 1. สั่งขยับ Cerrier พุ่งไปข้างหน้าตามแนวราง (แกน Z) สะสมรอบละ 20 ซม. แล้วหยุด
       tw('carrier_tape', new THREE.Vector3(0, 0, 2), 0.5/S);  
+      
+      // 2. สั่งล้อฟีดแดง Roll1 หมุนรอบตัวเอง 90 องศา (Local Axis Y) ไปพร้อม ๆ กันเป็นสเตปจังหวะมือ
+      twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'y');
       break;
 
     case 'INIT':
+      // ดึงสไลด์กลไกกลับมารอที่แท่นศูนย์สตาร์ทเมื่อกดเริ่มต้นวงลูปรอบโปรเจกต์ใหม่
       ret('carrier_tape', 0.25/S); 
       break;
 
@@ -296,7 +325,11 @@ function animate(){
   for(let i=tweens.length-1;i>=0;i--){
     const t=tweens[i]; t.elapsed+=dt;
     const p=Math.min(t.elapsed/t.dur,1), ep=ease(p);
-    t.mesh.position.lerpVectors(t.from,t.to,ep);
+    
+    // คำนวณคัดแยกการควบคุมตำแหน่ง (Position) หรือมุมบิดหมุน (Rotation)
+    if(t.isRot) t.mesh.rotation[t.rotAxis||'z'] = t.fromRot + (t.toRot - t.fromRot) * ep;
+    else t.mesh.position.lerpVectors(t.from,t.to,ep);
+    
     if(p>=1){if(t.onDone)t.onDone();tweens.splice(i,1);}
   }
   if(tweens.length===0) document.getElementById('animTag').style.display='none';
@@ -304,7 +337,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล GLB ──
+// ── 🚀 แก้ไขชื่อตำแหน่งปลายทางดึงข้อมูลไฟล์โมเดลจักรกลหลักเป็น Run.glb เรียบร้อย ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -427,7 +460,7 @@ function triggerNextTransition() {
   } else {
     const prob = PROB[current] ?? 0.9;
     const result = Math.random() < prob ? 'OK' : 'NG';
-    advance(result);
+    timer = setTimeout(() => advance(result), 100);
   }
 }
 
@@ -459,14 +492,14 @@ window.fsmReset = function(){
   clearTimeout(timer); running=false; stepAllowed=false;
   restoreAll(); tweens.length=0;
   
-  // 🌟 ลูปแก้ไขคืนค่าตำแหน่งและองศาเดิมที่ถูกต้องของโมเดลจักรกล
+  // ลูปรีเซ็ตคืนค่าพิกัดพิกัดตำแหน่ง และยึดมุมเอียงเดิมจากโครงสร้างไฟล์ GLB (ไม่บิดหลุดออกแนวราง)
   Object.keys(meshMap).forEach(role=>{
     const m=meshMap[role];
     if(m && origPos[role]){
-      m.position.copy(origPos[role]); // คืนพิกัดตำแหน่งเริ่มต้น
+      m.position.copy(origPos[role]); 
       
       if(m._origRot) {
-        m.rotation.copy(m._origRot); // คืนค่าองศาการเอียงจริงจากไฟล์ GLB (ไม่บังคับเป็น 0,0,0)
+        m.rotation.copy(m._origRot); // ล็อกคืนค่าองศาการเอียงแท้จริงจากไฟล์ Blender
       }
     }
   });
