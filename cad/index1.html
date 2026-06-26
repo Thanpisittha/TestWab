@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Center Pivot Roll Rotation)</title>
+  <title>BK05 — Digital Twin (Perfect Local Roll Rotation)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -136,9 +136,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// ── 🛠️ จุดแก้ไขที่ 1: แมปชื่อให้ตรงตามโครงสร้างไฟล์จริงใน Run.glb ของคุณ ──
 const PART_NAMES = {
   carrier_tape: 'Cerrier', 
-  roller_feed:  'Roll_1', 
+  roller_feed:  'Roll_1', // เปลี่ยนชื่อเป็น Roll_1 เพื่อจับคู่ชิ้นงานสีแดงฝั่งขวาเจอ
 };
 
 const STATES = [
@@ -240,7 +241,7 @@ function tw(role,delta,durSec,onDone=null){
   document.getElementById('animTag').style.display='block';
 }
 
-function twRot(role,deltaRot,durSec,axis='z',onDone=null){
+function twRot(role,deltaRot,durSec,axis='x',onDone=null){
   const mesh=meshMap[role]; if(!mesh) return;
   const key=role+'_r';
   const i=tweens.findIndex(t=>t.role===key); if(i>-1) tweens.splice(i,1);
@@ -288,7 +289,7 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมการขยับและหมุนวัตถุ ──
+// ── 🎬 ฟังก์ชันควบคุมการทำงาน ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -297,11 +298,11 @@ function playAnim(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
       
-      // Cerrier เลื่อนหน้าไปทีละ 20 ซม.
+      // 1. Cerrier ขยับเลื่อนพุ่งหน้าทีละ 20 ซม. (แกน Z ท้องถิ่น)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.5/S);  
       
-      // สั่งงานชิ้นส่วนแกนกลางวงกลมของ Roll1 ให้หมุนอยู่กับที่รอบแกนตัวเอง (ตั้งต้นไว้แกน y)
-      twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'y');
+      // 2. จุดแก้ไขที่ 3: สั่งม้วนฟีดหมุนบนแกน X ย่อย เพื่อให้มันกลิ้งหมุนกลมอยู่กับที่สอดคล้องกับแนวราง
+      twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'x');
       break;
 
     case 'INIT':
@@ -324,7 +325,7 @@ function animate(){
     const t=tweens[i]; t.elapsed+=dt;
     const p=Math.min(t.elapsed/t.dur,1), ep=ease(p);
     
-    if(t.isRot) t.mesh.rotation[t.rotAxis||'z'] = t.fromRot + (t.toRot - t.fromRot) * ep;
+    if(t.isRot) t.mesh.rotation[t.rotAxis||'x'] = t.fromRot + (t.toRot - t.fromRot) * ep;
     else t.mesh.position.lerpVectors(t.from,t.to,ep);
     
     if(p>=1){if(t.onDone)t.onDone();tweens.splice(i,1);}
@@ -334,7 +335,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และจัดพิกัดจุดหมุนวงใน ──
+// ── โหลดไฟล์โมเดล Run.glb และระบบประมวลผลย้ายแกน Pivot อัตโนมัติหลังบ้าน ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -349,34 +350,28 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   const box=new THREE.Box3().setFromObject(model);
   const center=box.getCenter(new THREE.Vector3());
   const size=box.getSize(new THREE.Vector3()).length();
-  model.position.sub(center);
-  camera.position.set(size*0.7, size*0.7, size*1.25);
-  controls.target.set(0,0,0);
+  
+  camera.position.set(center.x + size*0.6, center.y + size*0.5, center.z + size*0.8);
+  controls.target.copy(center);
   controls.update();
   
   model.traverse(obj=>{
     if(!obj.isMesh) return;
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
+      // 🛠️ จุดแก้ไขที่ 2: ระบบตรวจจับและชดเชยจุด Pivot ของก้อน Roll_1 ที่เพี้ยนมาจาก Blender
       if(role === 'roller_feed') {
-        // 🌟 แก้ไข: ส่องเข้าไปหาชิ้นส่วน Mesh วงในสุดของ Roll1 เพื่อเอามาจัดศูนย์กลางสำหรับใช้หมุนอยู่กับที่
-        let innerTarget = null;
-        obj.traverse(child => {
-          if(child.isMesh && !innerTarget) {
-            innerTarget = child; // ล็อกวงกลมชิ้นแรกที่เป็นโครงสร้างภายใต้โมเดล Roll1
-          }
-        });
+        obj.geometry.computeBoundingBox();
+        const localCenter = new THREE.Vector3();
+        obj.geometry.boundingBox.getCenter(localCenter);
         
-        if(innerTarget && innerTarget.geometry) {
-          innerTarget.geometry.center(); // บังคับย้ายจุด Origin ของชิ้นวงในมาอยู่ตรงกลางเป๊ะๆ
-          reg(role, innerTarget);        // ส่งมอบการควบคุมแอนิเมชันไปผูกไว้กับวัตถุวงในตัวนี้แทน
-        } else {
-          obj.geometry.center();
-          reg(role, obj);
-        }
-      } else {
-        reg(role,obj);
+        // รวบพิกัดเนื้อโมเดลภายในก้อนจานแดงทั้งหมดมาไว้ที่จุด (0,0,0) ท้องถิ่นเพื่อสร้างแกนหมุนรอบตัวเอง
+        obj.geometry.center();
+        
+        // ย้ายพิกัดตําแหน่งหลัก (World Position) คืนกลับไปประกอบเข้าล็อกเดิมบนตัวโครงสร้าง Farm อัตโนมัติ
+        obj.position.add(localCenter);
       }
+      reg(role, obj); 
     }
   });
   
