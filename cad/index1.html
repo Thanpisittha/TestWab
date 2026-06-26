@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Cumulative & Roll Rotation)</title>
+  <title>BK05 — Digital Twin (Center Pivot Roll Rotation)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -136,13 +136,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// ── 🛠️ แมปชื่อวัตถุจาก Blender (เพิ่มตัวม้วนฟีดขนาดใหญ่สีแดง Roll1) ──
 const PART_NAMES = {
   carrier_tape: 'Cerrier', 
-  roller_feed:  'Roll_1', // ผูกม้วนสีแดงเข้ากับระบบบอร์ดคอนโทรล
+  roller_feed:  'Roll1', 
 };
 
-// ── FSM ลำดับการทำงานเครื่อง ──
 const STATES = [
   {id:'INIT',        action:'Initialize'},
   {id:'READY',       action:'Waiting for Start'},
@@ -218,8 +216,10 @@ const meshMap={}, origPos={}, origMat={};
 function reg(role,mesh){
   meshMap[role]=mesh;
   origPos[role]=mesh.position.clone();
-  mesh._origRot=mesh.rotation.clone(); // บันทึกมุมเอียงแท้จริงจากโครงสร้างไฟล์ Blender ไว้อย่างแน่นหนา
-  origMat[role]=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
+  mesh._origRot=mesh.rotation.clone(); 
+  if(mesh.material) {
+    origMat[role]=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
+  }
 }
 
 // ── Tween & Animation System ──
@@ -240,7 +240,6 @@ function tw(role,delta,durSec,onDone=null){
   document.getElementById('animTag').style.display='block';
 }
 
-// ฟังก์ชันรองรับระบบการควบคุมการหมุนชิ้นงาน (Local Animation)
 function twRot(role,deltaRot,durSec,axis='z',onDone=null){
   const mesh=meshMap[role]; if(!mesh) return;
   const key=role+'_r';
@@ -289,7 +288,7 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมอนิเมชันวัตถุ (Cerrier เลื่อน + Roll1 หมุนกลิ้งสัมพันธ์กัน) ──
+// ── 🎬 ฟังก์ชันควบคุมการขยับและหมุนวัตถุ ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -298,15 +297,14 @@ function playAnim(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
       
-      // 1. สั่งขยับ Cerrier พุ่งไปข้างหน้าตามแนวราง (แกน Z) สะสมรอบละ 20 ซม. แล้วหยุด
-      tw('carrier_tape', new THREE.Vector3(0, 0, 2), 0.5/S);  
+      // Cerrier เลื่อนหน้าไปทีละ 20 ซม.
+      tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.5/S);  
       
-      // 2. สั่งล้อฟีดแดง Roll1 หมุนรอบตัวเอง 90 องศา (Local Axis Y) ไปพร้อม ๆ กันเป็นสเตปจังหวะมือ
-      twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'z');
+      // สั่งงานชิ้นส่วนแกนกลางวงกลมของ Roll1 ให้หมุนอยู่กับที่รอบแกนตัวเอง (ตั้งต้นไว้แกน y)
+      twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'y');
       break;
 
     case 'INIT':
-      // ดึงสไลด์กลไกกลับมารอที่แท่นศูนย์สตาร์ทเมื่อกดเริ่มต้นวงลูปรอบโปรเจกต์ใหม่
       ret('carrier_tape', 0.25/S); 
       break;
 
@@ -326,7 +324,6 @@ function animate(){
     const t=tweens[i]; t.elapsed+=dt;
     const p=Math.min(t.elapsed/t.dur,1), ep=ease(p);
     
-    // คำนวณคัดแยกการควบคุมตำแหน่ง (Position) หรือมุมบิดหมุน (Rotation)
     if(t.isRot) t.mesh.rotation[t.rotAxis||'z'] = t.fromRot + (t.toRot - t.fromRot) * ep;
     else t.mesh.position.lerpVectors(t.from,t.to,ep);
     
@@ -337,7 +334,7 @@ function animate(){
 }
 animate();
 
-// ── 🚀 แก้ไขชื่อตำแหน่งปลายทางดึงข้อมูลไฟล์โมเดลจักรกลหลักเป็น Run.glb เรียบร้อย ──
+// ── โหลดไฟล์โมเดล Run.glb และจัดพิกัดจุดหมุนวงใน ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -360,7 +357,27 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   model.traverse(obj=>{
     if(!obj.isMesh) return;
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
-    if(role) reg(role,obj);
+    if(role) {
+      if(role === 'roller_feed') {
+        // 🌟 แก้ไข: ส่องเข้าไปหาชิ้นส่วน Mesh วงในสุดของ Roll1 เพื่อเอามาจัดศูนย์กลางสำหรับใช้หมุนอยู่กับที่
+        let innerTarget = null;
+        obj.traverse(child => {
+          if(child.isMesh && !innerTarget) {
+            innerTarget = child; // ล็อกวงกลมชิ้นแรกที่เป็นโครงสร้างภายใต้โมเดล Roll1
+          }
+        });
+        
+        if(innerTarget && innerTarget.geometry) {
+          innerTarget.geometry.center(); // บังคับย้ายจุด Origin ของชิ้นวงในมาอยู่ตรงกลางเป๊ะๆ
+          reg(role, innerTarget);        // ส่งมอบการควบคุมแอนิเมชันไปผูกไว้กับวัตถุวงในตัวนี้แทน
+        } else {
+          obj.geometry.center();
+          reg(role, obj);
+        }
+      } else {
+        reg(role,obj);
+      }
+    }
   });
   
   addLog(`GLB loaded — จับคู่ชิ้นส่วน [${Object.keys(meshMap).join(', ')}]`,'info');
@@ -492,14 +509,12 @@ window.fsmReset = function(){
   clearTimeout(timer); running=false; stepAllowed=false;
   restoreAll(); tweens.length=0;
   
-  // ลูปรีเซ็ตคืนค่าพิกัดพิกัดตำแหน่ง และยึดมุมเอียงเดิมจากโครงสร้างไฟล์ GLB (ไม่บิดหลุดออกแนวราง)
   Object.keys(meshMap).forEach(role=>{
     const m=meshMap[role];
     if(m && origPos[role]){
       m.position.copy(origPos[role]); 
-      
       if(m._origRot) {
-        m.rotation.copy(m._origRot); // ล็อกคืนค่าองศาการเอียงแท้จริงจากไฟล์ Blender
+        m.rotation.copy(m._origRot); 
       }
     }
   });
