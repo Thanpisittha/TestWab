@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Manual Step Mode)</title>
+  <title>BK05 — Digital Twin (Cumulative Manual Step)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -218,13 +218,22 @@ function reg(role,mesh){
   origMat[role]=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
 }
 
-// ── Tween & Animation System ──
+// ── Tween & Animation System (บวกระยะตำแหน่งเพิ่มต่อจากพิกัดปัจจุบันล่าสุด) ──
 const tweens=[];
 function tw(role,delta,durSec,onDone=null){
   const mesh=meshMap[role]; if(!mesh) return;
   const i=tweens.findIndex(t=>t.role===role); if(i>-1) tweens.splice(i,1);
-  tweens.push({role,mesh,from:mesh.position.clone(),
-    to:mesh.position.clone().add(delta),dur:durSec,elapsed:0,onDone});
+  
+  // แกนแก้ไข: สั่งบวก Offset จากพิกัดล่าสุดของวัตถุ ณ วินาทีนั้นจริง ๆ ไม่ยึดโยงพิกัดเริ่มต้น
+  tweens.push({
+    role,
+    mesh,
+    from: mesh.position.clone(),
+    to: mesh.position.clone().add(delta), 
+    dur: durSec,
+    elapsed: 0,
+    onDone
+  });
   document.getElementById('animTag').style.display='block';
 }
 function ret(role,durSec=0.18){
@@ -252,11 +261,12 @@ function hl(role,mat){const m=meshMap[role];if(m){m.material=mat;}}
 function restoreAll(){
   Object.keys(meshMap).forEach(r=>{
     const m=meshMap[r];
+    // ล้างเฉพาะแมทีเรียลแสงสี ส่วนตำแหน่งของสไลด์จะล็อกค้างไว้ตามพิกัด Tween ปัจจุบัน
     if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
   });
 }
 
-// ── ฟังก์ชันขยับวัตถุ (เลื่อน 20cm ในสเตท INDEX) ──
+// ── ฟังก์ชันขยับวัตถุ (ขยับบวกพิกัดเพิ่มสะสมไปข้างหน้าเรื่อย ๆ ทีละ 20cm) ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -264,11 +274,13 @@ function playAnim(id){
   switch(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
+      // กดปุ่มขยับกี่รอบก็เด้งไปข้างหน้าแกน X เพิ่มรอบละ 0.2 (20cm) เสมอ
       tw('carrier_tape', new THREE.Vector3(0.2, 0, 0), 0.5/S);  
       break;
 
     case 'INIT':
-    case 'READY':
+      // ตัดกรณี READY ออกจากตรงนี้ เพื่อปล่อยให้วัตถุคาตำแหน่งสะสมไว้ขยับต่อลูปถัดไป
+      // จะยอมถอยกลับมาจุดสตาร์ทก็ต่อเมื่อกดรีเซ็ตระบบเครื่องเท่านั้น
       ret('carrier_tape', 0.25/S); 
       break;
 
@@ -342,19 +354,18 @@ function addLog(msg,type='info'){
   b.appendChild(el);b.scrollTop=b.scrollHeight;
 }
 
-// ── 🕹️ ระบบควบคุมโหมดและ FSM Engine ตัวใหม่ ──
+// ── ระบบควบคุม FSM Engine ──
 let current='READY', running=false, timer=null;
-let isManualMode = false; // false = Auto, true = Manual
-let stepAllowed = false;   // ล็อคป้องกันการกด Step รัวๆ ระหว่างอนิเมชันทำงานไม่เสร็จ
+let isManualMode = false; 
+let stepAllowed = false;   
 let packed=0, cycles=0, alarms=0;
 
-// ฟังก์ชันสลับโหมดการทำงาน
 window.switchMode = function(mode) {
   if(mode === 'manual') {
     isManualMode = true;
     document.getElementById('btnModeManual').classList.add('active-mode');
     document.getElementById('btnModeAuto').classList.remove('active-mode');
-    document.getElementById('speedRow').style.opacity = '0.4'; // ปิดแถบความเร็วเพราะควบคุมมือ
+    document.getElementById('speedRow').style.opacity = '0.4'; 
     addLog('🕹️ สลับเข้าสู่โหมดควบคุมทีละสเตป (Manual Mode)', 'warn');
     if(running && stepAllowed) {
       document.getElementById('btnStep').disabled = false;
@@ -366,7 +377,6 @@ window.switchMode = function(mode) {
     document.getElementById('speedRow').style.opacity = '1';
     document.getElementById('btnStep').disabled = true;
     addLog('🤖 สลับเข้าสู่โหมดอัตโนมัติ (Auto Mode)', 'info');
-    // ถ้าเครื่องรันอยู่และค้างจังหวะ Manual ให้มันวิ่งต่ออัตโนมัติทันที
     if(running && stepAllowed) {
       stepAllowed = false;
       document.getElementById('btnStep').disabled = true;
@@ -402,21 +412,17 @@ function setState(id){
   
   if(!running) return;
 
-  // หน่วงเวลาอนิเมชันภายในสเตทนั้นๆ ให้เสร็จสิ้นก่อน
   timer = setTimeout(() => {
     if (isManualMode) {
-      // โหมด Manual: เปิดปุ่ม Step ให้ผู้ใช้งานกดสั่งงานสเตปถัดไปเอง
       stepAllowed = true;
       document.getElementById('btnStep').disabled = false;
       addLog(`[Ready] สเตท ${id} ทำงานเสร็จแล้ว กดปุ่ม Step เพื่อไปต่อ...`, 'warn');
     } else {
-      // โหมด Auto: คำนวณขยับไปสเตปถัดไปทันทีอัตโนมัติ
       triggerNextTransition();
     }
   }, ms(id));
 }
 
-// ฟังก์ชันสำหรับสุ่มสัญญาณเพื่อขยับ State
 function triggerNextTransition() {
   const tr = TR[current]; if(!tr) return;
   if(tr.auto){
@@ -436,11 +442,10 @@ function advance(sig){
   if(next) setState(next);
 }
 
-// ปุ่มกดทีละสเตปในโหมด Manual
 window.fsmStep = function() {
   if(!running || !isManualMode || !stepAllowed) return;
   stepAllowed = false;
-  document.getElementById('btnStep').disabled = true; // ล็อคปุ่มระหว่างเปลี่ยนสเตท
+  document.getElementById('btnStep').disabled = true; 
   triggerNextTransition();
 }
 
@@ -450,8 +455,6 @@ window.fsmStart = function(){
   stepAllowed = false;
   document.getElementById('btnStart').disabled=true;
   document.getElementById('btnReset').disabled=false;
-  
-  addLog('▶ เริ่มต้นระบบสั่งงานเครื่อง BK05','info');
   setState('INIT');
 };
 
@@ -471,7 +474,7 @@ window.fsmReset = function(){
   document.getElementById('ovState').textContent='READY';
   document.getElementById('ovState').className='ov-state';
   document.getElementById('ovDesc').textContent='Waiting for Start';
-  current='READY'; addLog('↺ Reset ระบบสถานะกลับจุดเริ่มต้น','warn');
+  current='READY'; addLog('↺ Reset ระบบสถานะและตำแหน่งวัตถุกลับจุดเริ่มต้นแล้ว','warn');
 };
 </script>
 </body>
