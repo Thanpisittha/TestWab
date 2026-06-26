@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Cerrier 20cm Stop)</title>
+  <title>BK05 — Digital Twin (Manual Step Mode)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -39,11 +39,12 @@
     .ctrl{padding:14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
     .btn-row{display:flex;gap:6px}
     .btn{flex:1;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:11px;
-      font-weight:600;cursor:pointer;background:var(--surface2);color:var(--muted);transition:all .2s}
+      font-weight:600;cursor:pointer;background:var(--surface2);color:var(--text);transition:all .2s}
     .btn:hover{border-color:var(--teal);color:var(--text)}
     .btn.primary{background:rgba(0,201,167,.12);color:var(--teal);border-color:var(--teal)}
     .btn.danger{background:rgba(248,113,113,.12);color:var(--red);border-color:var(--red)}
-    .btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+    .btn.active-mode{background:var(--teal);color:#000;border-color:var(--teal)}
+    .btn:disabled{opacity:.25;cursor:not-allowed;pointer-events:none}
     .speed-row{display:flex;align-items:center;gap:8px}
     .slbl{font-size:11px;color:var(--muted);white-space:nowrap}
     input[type=range]{flex:1;accent-color:var(--teal)}
@@ -98,12 +99,16 @@
 
 <div class="panel">
   <div class="ctrl">
+    <div class="btn-row" style="margin-bottom: 4px;">
+      <button class="btn active-mode" id="btnModeAuto" onclick="switchMode('auto')">🤖 Auto</button>
+      <button class="btn" id="btnModeManual" onclick="switchMode('manual')">🕹️ Manual</button>
+    </div>
     <div class="btn-row">
       <button class="btn primary" id="btnStart" onclick="fsmStart()">▶ Start</button>
-      <button class="btn" id="btnPause" onclick="fsmPause()" disabled>⏸ Pause</button>
+      <button class="btn" id="btnStep" onclick="fsmStep()" disabled style="background:rgba(167,139,250,0.15); color:var(--purple); border-color:var(--purple)">Step ➡️</button>
       <button class="btn danger" id="btnReset" onclick="fsmReset()" disabled>↺ Reset</button>
     </div>
-    <div class="speed-row">
+    <div class="speed-row" id="speedRow">
       <span class="slbl">Speed</span>
       <input type="range" id="spd" min="0.5" max="3" step="0.5" value="1"
         oninput="speedMul=+this.value;document.getElementById('sval').textContent=this.value+'×'">
@@ -131,12 +136,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// ── 🛠️ แมปชื่อก้อนวัตถุตามชื่อจริงขวาบนใน Blender 'Cerrier' ──
 const PART_NAMES = {
   carrier_tape: 'Cerrier', 
 };
 
-// ── FSM ลำดับการทำงานเครื่อง ──
 const STATES = [
   {id:'INIT',        action:'Initialize'},
   {id:'READY',       action:'Waiting for Start'},
@@ -195,7 +198,6 @@ const camera = new THREE.PerspectiveCamera(45,1,0.01,1000);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 
-// ตั้งค่าความสว่างของแสงให้โมเดลสวยคมชัด
 scene.add(new THREE.AmbientLight(0xffffff,1.2));
 const dl = new THREE.DirectionalLight(0xffffff,1.5); dl.position.set(4,6,4); scene.add(dl);
 
@@ -233,16 +235,16 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// ── 🛠️ ปรับแต่ง Material ไฮไลท์เรืองแสงสีเขียวนีออนสะท้อนแสงเด่นชัด ──
+// ── Material ไฮไลท์เรืองแสงนีออน ──
 const hlMat = new THREE.MeshStandardMaterial({
   color: 0x00ffcc,       
-  emissive: 0x00aa66,    // ผิววัสดุเรืองแสงตัวเองสว่างขึ้น
+  emissive: 0x00aa66,    
   roughness: 0.1,
   metalness: 0.1
 });
 const alMat = new THREE.MeshStandardMaterial({
   color: 0xff3333,       
-  emissive: 0xcc0000,    // เรืองแสงสีแดงตอนเกิด Alarm
+  emissive: 0xcc0000,    
   roughness: 0.1
 });
 
@@ -254,28 +256,23 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันขยับวัตถุ (เลื่อน 20cm แล้วหยุดนิ่ง ล้างค่าเมื่อเริ่มรอบใหม่) ──
+// ── ฟังก์ชันขยับวัตถุ (เลื่อน 20cm ในสเตท INDEX) ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
 
   switch(id){
     case 'INDEX':
-      // เปิดไฟไฮไลท์สีเขียวนีออนที่ตัว Cerrier
       hl('carrier_tape', hlMat); 
-      
-      // สั่งขยับเลื่อนไปแกน X (ตัวเลขตัวแรก) เป็นระยะ 0.2 (20 ซม.) แล้วจอดหยุดนิ่งค้างไว้เลย
       tw('carrier_tape', new THREE.Vector3(0.2, 0, 0), 0.5/S);  
       break;
 
     case 'INIT':
     case 'READY':
-      // เมื่อระบบกลับมาหน้าพร้อมทำงานรอบใหม่ ให้สไลด์ถอยหลังกลับจุดสตาร์ทเงียบๆ อย่างนุ่มนวล
       ret('carrier_tape', 0.25/S); 
       break;
 
     case 'ALARM':
-      // เกิดเหตุขัดข้องเปิดไฟสีแดงเรืองแสงแจ้งเตือนชิ้นงาน
       hl('carrier_tape', alMat);
       break;
   }
@@ -298,7 +295,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดลพร้อมระบบ Auto-Center และปรับมุมกล้องโฟกัสอัตโนมัติ ──
+// ── โหลดไฟล์โมเดล GLB ──
 new GLTFLoader().load('./export/Tast.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -313,12 +310,9 @@ new GLTFLoader().load('./export/Tast.glb', gltf=>{
   const box=new THREE.Box3().setFromObject(model);
   const center=box.getCenter(new THREE.Vector3());
   const size=box.getSize(new THREE.Vector3()).length();
-  
-  model.position.sub(center); // บังคับชิ้นงานอยู่จุดศูนย์กลางโลกพอดี
-  
-  camera.position.set(size*0.7, size*0.7, size*1.25); // ปรับระดับเลนส์กล้องให้มองเห็นชิ้นงานมุมกว้างชัดเจน
+  model.position.sub(center);
+  camera.position.set(size*0.7, size*0.7, size*1.25);
   controls.target.set(0,0,0);
-  controls.maxDistance = size * 3;
   controls.update();
   
   model.traverse(obj=>{
@@ -327,7 +321,7 @@ new GLTFLoader().load('./export/Tast.glb', gltf=>{
     if(role) reg(role,obj);
   });
   
-  addLog(`GLB loaded — จับคู่เจอชิ้นส่วนวัตถุ [${Object.keys(meshMap).join(', ')}]`,'info');
+  addLog(`GLB loaded — จับคู่ชิ้นส่วน [${Object.keys(meshMap).join(', ')}]`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
 // ── UI Generation ──
@@ -348,9 +342,38 @@ function addLog(msg,type='info'){
   b.appendChild(el);b.scrollTop=b.scrollHeight;
 }
 
-// ── FSM Engine ──
-let current='READY',running=false,paused=false,timer=null;
-let packed=0,cycles=0,alarms=0;
+// ── 🕹️ ระบบควบคุมโหมดและ FSM Engine ตัวใหม่ ──
+let current='READY', running=false, timer=null;
+let isManualMode = false; // false = Auto, true = Manual
+let stepAllowed = false;   // ล็อคป้องกันการกด Step รัวๆ ระหว่างอนิเมชันทำงานไม่เสร็จ
+let packed=0, cycles=0, alarms=0;
+
+// ฟังก์ชันสลับโหมดการทำงาน
+window.switchMode = function(mode) {
+  if(mode === 'manual') {
+    isManualMode = true;
+    document.getElementById('btnModeManual').classList.add('active-mode');
+    document.getElementById('btnModeAuto').classList.remove('active-mode');
+    document.getElementById('speedRow').style.opacity = '0.4'; // ปิดแถบความเร็วเพราะควบคุมมือ
+    addLog('🕹️ สลับเข้าสู่โหมดควบคุมทีละสเตป (Manual Mode)', 'warn');
+    if(running && stepAllowed) {
+      document.getElementById('btnStep').disabled = false;
+    }
+  } else {
+    isManualMode = false;
+    document.getElementById('btnModeAuto').classList.add('active-mode');
+    document.getElementById('btnModeManual').classList.remove('active-mode');
+    document.getElementById('speedRow').style.opacity = '1';
+    document.getElementById('btnStep').disabled = true;
+    addLog('🤖 สลับเข้าสู่โหมดอัตโนมัติ (Auto Mode)', 'info');
+    // ถ้าเครื่องรันอยู่และค้างจังหวะ Manual ให้มันวิ่งต่ออัตโนมัติทันที
+    if(running && stepAllowed) {
+      stepAllowed = false;
+      document.getElementById('btnStep').disabled = true;
+      triggerNextTransition();
+    }
+  }
+}
 
 function setState(id){
   document.querySelectorAll('.si.active,.si.alarm-s').forEach(e=>{
@@ -360,72 +383,87 @@ function setState(id){
   const el=document.getElementById('si_'+id);
   if(el){el.classList.remove('visited');el.classList.add(id==='ALARM'?'alarm-s':'active');el.scrollIntoView({block:'nearest',behavior:'smooth'});}
   const s=STATES.find(x=>x.id===id);
+  
   document.getElementById('ovState').textContent=id;
   document.getElementById('ovState').className='ov-state'+(id==='ALARM'?' alarm':'');
   document.getElementById('ovDesc').textContent=s?.action||'';
-  const dot=document.getElementById('hdot'),hs=document.getElementById('hstatus');
-  if(!running){dot.className='hdot';hs.textContent='Idle';}
-  else if(id==='ALARM'){dot.className='hdot alarm';hs.textContent='ALARM';}
-  else{dot.className='hdot run';hs.textContent='Running';}
+  
+  const dot=document.getElementById('hdot'), hs=document.getElementById('hstatus');
+  if(!running){dot.className='hdot'; hs.textContent='Idle';}
+  else if(id==='ALARM'){dot.className='hdot alarm'; hs.textContent='ALARM';}
+  else{dot.className='hdot run'; hs.textContent='Running';}
   
   playAnim(id);
   
-  addLog('→ '+id+(s?' : '+s.action:''),id==='ALARM'?'err':'info');
-  if(id==='ROLL') {packed++;document.getElementById('cPacked').textContent=packed;}
-  if(id==='STOP') {cycles++;document.getElementById('cCycles').textContent=cycles;}
-  if(id==='ALARM'){alarms++;document.getElementById('cAlarm').textContent=alarms;}
-  if(!running||paused) return;
-  const tr=TR[id]; if(!tr) return;
+  addLog('→ '+id+(s?' : '+s.action:''), id==='ALARM'?'err':'info');
+  if(id==='ROLL') {packed++; document.getElementById('cPacked').textContent=packed;}
+  if(id==='STOP') {cycles++; document.getElementById('cCycles').textContent=cycles;}
+  if(id==='ALARM'){alarms++; document.getElementById('cAlarm').textContent=alarms;}
+  
+  if(!running) return;
+
+  // หน่วงเวลาอนิเมชันภายในสเตทนั้นๆ ให้เสร็จสิ้นก่อน
+  timer = setTimeout(() => {
+    if (isManualMode) {
+      // โหมด Manual: เปิดปุ่ม Step ให้ผู้ใช้งานกดสั่งงานสเตปถัดไปเอง
+      stepAllowed = true;
+      document.getElementById('btnStep').disabled = false;
+      addLog(`[Ready] สเตท ${id} ทำงานเสร็จแล้ว กดปุ่ม Step เพื่อไปต่อ...`, 'warn');
+    } else {
+      // โหมด Auto: คำนวณขยับไปสเตปถัดไปทันทีอัตโนมัติ
+      triggerNextTransition();
+    }
+  }, ms(id));
+}
+
+// ฟังก์ชันสำหรับสุ่มสัญญาณเพื่อขยับ State
+function triggerNextTransition() {
+  const tr = TR[current]; if(!tr) return;
   if(tr.auto){
-    timer=setTimeout(()=>advance('auto'),ms(id));
+    advance('auto');
   } else {
-    const prob=PROB[id]??0.9;
-    const result=Math.random()<prob?'OK':'NG';
-    timer=setTimeout(()=>advance(result),ms(id));
+    const prob = PROB[current] ?? 0.9;
+    const result = Math.random() < prob ? 'OK' : 'NG';
+    advance(result);
   }
 }
 
 function advance(sig){
-  if(!running||paused) return;
+  if(!running) return;
   clearTimeout(timer);
-  const tr=TR[current]; if(!tr) return;
-  const next=tr[sig]||tr.auto;
+  const tr = TR[current]; if(!tr) return;
+  const next = tr[sig] || tr.auto;
   if(next) setState(next);
 }
 
-window.fsmStart=function(){
+// ปุ่มกดทีละสเตปในโหมด Manual
+window.fsmStep = function() {
+  if(!running || !isManualMode || !stepAllowed) return;
+  stepAllowed = false;
+  document.getElementById('btnStep').disabled = true; // ล็อคปุ่มระหว่างเปลี่ยนสเตท
+  triggerNextTransition();
+}
+
+window.fsmStart = function(){
   if(running) return;
-  running=true;paused=false;
+  running=true;
+  stepAllowed = false;
   document.getElementById('btnStart').disabled=true;
-  document.getElementById('btnPause').disabled=false;
   document.getElementById('btnReset').disabled=false;
-  addLog('▶ BK05 Start เรียบร้อย','info');
+  
+  addLog('▶ เริ่มต้นระบบสั่งงานเครื่อง BK05','info');
   setState('INIT');
 };
-window.fsmPause=function(){
-  if(!running) return;
-  paused=!paused;clearTimeout(timer);
-  const btn=document.getElementById('btnPause');
-  btn.textContent=paused?'▶ Resume':'⏸ Pause';
-  document.getElementById('hdot').className=paused?'hdot':'hdot run';
-  document.getElementById('hstatus').textContent=paused?'Paused':'Running';
-  addLog(paused?'⏸ Paused':'▶ Resumed','warn');
-  if(!paused){
-    const tr=TR[current];if(!tr)return;
-    if(tr.auto)timer=setTimeout(()=>advance('auto'),ms(current));
-    else{const p=PROB[current]??0.9;const r=Math.random()<p?'OK':'NG';timer=setTimeout(()=>advance(r),ms(current));}
-  }
-};
-window.fsmReset=function(){
-  clearTimeout(timer);running=false;paused=false;
-  restoreAll();tweens.length=0;
+
+window.fsmReset = function(){
+  clearTimeout(timer); running=false; stepAllowed=false;
+  restoreAll(); tweens.length=0;
   Object.keys(meshMap).forEach(role=>{
     const m=meshMap[role];
-    if(m&&origPos[role]){m.position.copy(origPos[role]);m.rotation.set(0,0,0);}
+    if(m&&origPos[role]){m.position.copy(origPos[role]); m.rotation.set(0,0,0);}
   });
   document.getElementById('btnStart').disabled=false;
-  document.getElementById('btnPause').disabled=true;
-  document.getElementById('btnPause').textContent='⏸ Pause';
+  document.getElementById('btnStep').disabled=true;
   document.getElementById('btnReset').disabled=true;
   document.getElementById('hdot').className='hdot';
   document.getElementById('hstatus').textContent='Idle';
@@ -433,7 +471,7 @@ window.fsmReset=function(){
   document.getElementById('ovState').textContent='READY';
   document.getElementById('ovState').className='ov-state';
   document.getElementById('ovDesc').textContent='Waiting for Start';
-  current='READY';addLog('↺ Reset ระบบ','warn');
+  current='READY'; addLog('↺ Reset ระบบสถานะกลับจุดเริ่มต้น','warn');
 };
 </script>
 </body>
