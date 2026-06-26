@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Cerrier Highlight)</title>
+  <title>BK05 — Digital Twin (Cerrier 20cm Stop)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -131,7 +131,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// ── 🛠️ จุดแก้ไขที่ 1: เปลี่ยนมาแมปตามชื่อจริงขวาบนใน Blender ของคุณ 'Cerrier' ──
+// ── 🛠️ แมปชื่อก้อนวัตถุตามชื่อจริงขวาบนใน Blender 'Cerrier' ──
 const PART_NAMES = {
   carrier_tape: 'Cerrier', 
 };
@@ -195,7 +195,7 @@ const camera = new THREE.PerspectiveCamera(45,1,0.01,1000);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 
-// ปรับเพิ่มแสงสว่างในฉากขึ้นเล็กน้อย
+// ตั้งค่าความสว่างของแสงให้โมเดลสวยคมชัด
 scene.add(new THREE.AmbientLight(0xffffff,1.2));
 const dl = new THREE.DirectionalLight(0xffffff,1.5); dl.position.set(4,6,4); scene.add(dl);
 
@@ -233,16 +233,16 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// ── 🛠️ จุดแก้ไขที่ 2: ปรับแต่ง Material ไฮไลท์เรืองแสงเนีอนให้เห็นชัดเจนขึ้น ──
+// ── 🛠️ ปรับแต่ง Material ไฮไลท์เรืองแสงสีเขียวนีออนสะท้อนแสงเด่นชัด ──
 const hlMat = new THREE.MeshStandardMaterial({
-  color: 0x00ffcc,       // สีเขียวฟ้านีออนสะท้อนแสง
-  emissive: 0x00aa66,    // สั่งให้ผิววัสดุเรืองแสงในตัวเอง
+  color: 0x00ffcc,       
+  emissive: 0x00aa66,    // ผิววัสดุเรืองแสงตัวเองสว่างขึ้น
   roughness: 0.1,
   metalness: 0.1
 });
 const alMat = new THREE.MeshStandardMaterial({
-  color: 0xff3333,       // สีแดงนีออนตอน Alarm
-  emissive: 0xcc0000,    // เรืองแสงสีแดงเข้ม
+  color: 0xff3333,       
+  emissive: 0xcc0000,    // เรืองแสงสีแดงตอนเกิด Alarm
   roughness: 0.1
 });
 
@@ -254,27 +254,28 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันอนิเมชันขยับวัตถุ ──
+// ── 🎬 ฟังก์ชันขยับวัตถุ (เลื่อน 20cm แล้วหยุดนิ่ง ล้างค่าเมื่อเริ่มรอบใหม่) ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
 
   switch(id){
     case 'INDEX':
-      // 1. สั่งเปิดไฟไฮไลท์สีเขียวนีออนที่ก้อน Cerrier ทันที
+      // เปิดไฟไฮไลท์สีเขียวนีออนที่ตัว Cerrier
       hl('carrier_tape', hlMat); 
       
-      // 2. สั่งขยับกระตุกไปตามแกน X ระยะ -0.15 หน่วยความยาว
-      tw('carrier_tape', new THREE.Vector3(-10, 0, 0), 0.50/S, () => {
-        // เมื่อเลื่อนไปสุดทางแล้ว ให้ค้างไว้แป๊บนึง แล้วค่อย ๆ สไลด์กลับมาตำแหน่งเดิม (Reset)
-        setTimeout(() => {
-          ret('carrier_tape', 0.20/S);
-        }, 150/S);
-      });
+      // สั่งขยับเลื่อนไปแกน X (ตัวเลขตัวแรก) เป็นระยะ 0.2 (20 ซม.) แล้วจอดหยุดนิ่งค้างไว้เลย
+      tw('carrier_tape', new THREE.Vector3(0.2, 0, 0), 0.5/S);  
+      break;
+
+    case 'INIT':
+    case 'READY':
+      // เมื่อระบบกลับมาหน้าพร้อมทำงานรอบใหม่ ให้สไลด์ถอยหลังกลับจุดสตาร์ทเงียบๆ อย่างนุ่มนวล
+      ret('carrier_tape', 0.25/S); 
       break;
 
     case 'ALARM':
-      // หากเกิดเหตุขัดข้อง สั่งไฮไลท์ไฟแดงเตือนที่ตัว Cerrier
+      // เกิดเหตุขัดข้องเปิดไฟสีแดงเรืองแสงแจ้งเตือนชิ้นงาน
       hl('carrier_tape', alMat);
       break;
   }
@@ -297,28 +298,31 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดลจากโฟลเดอร์ของคุณ พร้อมฟังก์ชัน Auto-Center และคุมกล้อง ──
+// ── โหลดไฟล์โมเดลพร้อมระบบ Auto-Center และปรับมุมกล้องโฟกัสอัตโนมัติ ──
 new GLTFLoader().load('./export/Tast.glb', gltf=>{
-  scene.add(gltf.scene);
+  const model = gltf.scene;
+  scene.add(model);
   
-  gltf.scene.traverse(obj => {
+  model.traverse(obj => {
     if(obj.isMesh) {
       obj.castShadow = true;
       obj.receiveShadow = true;
     }
   });
 
-  const box=new THREE.Box3().setFromObject(gltf.scene);
+  const box=new THREE.Box3().setFromObject(model);
   const center=box.getCenter(new THREE.Vector3());
   const size=box.getSize(new THREE.Vector3()).length();
-  gltf.scene.position.sub(center);
-  camera.position.set(size*0.6, size*0.6, size*1.1);
+  
+  model.position.sub(center); // บังคับชิ้นงานอยู่จุดศูนย์กลางโลกพอดี
+  
+  camera.position.set(size*0.7, size*0.7, size*1.25); // ปรับระดับเลนส์กล้องให้มองเห็นชิ้นงานมุมกว้างชัดเจน
   controls.target.set(0,0,0);
+  controls.maxDistance = size * 3;
   controls.update();
   
-  gltf.scene.traverse(obj=>{
+  model.traverse(obj=>{
     if(!obj.isMesh) return;
-    // ตรวจสอบชื่อวัตถุในโครงสร้าง GLB ให้ตรงกับคำว่า 'Cerrier'
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) reg(role,obj);
   });
