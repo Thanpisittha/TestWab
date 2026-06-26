@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Cumulative Manual Step)</title>
+  <title>BK05 — Digital Twin (Fix Reset Orientation)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -215,16 +215,16 @@ const meshMap={}, origPos={}, origMat={};
 function reg(role,mesh){
   meshMap[role]=mesh;
   origPos[role]=mesh.position.clone();
+  mesh._origRot=mesh.rotation.clone(); // 🌟 จำค่ามุมเอียงองศาแท้จากไฟล์ GLB ไว้ที่นี่
   origMat[role]=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
 }
 
-// ── Tween & Animation System (บวกระยะตำแหน่งเพิ่มต่อจากพิกัดปัจจุบันล่าสุด) ──
+// ── Tween & Animation System ──
 const tweens=[];
 function tw(role,delta,durSec,onDone=null){
   const mesh=meshMap[role]; if(!mesh) return;
   const i=tweens.findIndex(t=>t.role===role); if(i>-1) tweens.splice(i,1);
   
-  // แกนแก้ไข: สั่งบวก Offset จากพิกัดล่าสุดของวัตถุ ณ วินาทีนั้นจริง ๆ ไม่ยึดโยงพิกัดเริ่มต้น
   tweens.push({
     role,
     mesh,
@@ -261,12 +261,11 @@ function hl(role,mat){const m=meshMap[role];if(m){m.material=mat;}}
 function restoreAll(){
   Object.keys(meshMap).forEach(r=>{
     const m=meshMap[r];
-    // ล้างเฉพาะแมทีเรียลแสงสี ส่วนตำแหน่งของสไลด์จะล็อกค้างไว้ตามพิกัด Tween ปัจจุบัน
     if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
   });
 }
 
-// ── ฟังก์ชันขยับวัตถุ (ขยับบวกพิกัดเพิ่มสะสมไปข้างหน้าเรื่อย ๆ ทีละ 20cm) ──
+// ── ฟังก์ชันควบคุมอนิเมชันวัตถุ ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -274,13 +273,11 @@ function playAnim(id){
   switch(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
-      // กดปุ่มขยับกี่รอบก็เด้งไปข้างหน้าแกน X เพิ่มรอบละ 0.2 (20cm) เสมอ
-      tw('carrier_tape', new THREE.Vector3(0, 0, -2), 0.5/S);  
+      // ขยับเลื่อนไปตามแนวหน้า-หลัง (แกน Z) ทีละ 20 ซม.
+      tw('carrier_tape', new THREE.Vector3(0, 0, 2), 0.5/S);  
       break;
 
     case 'INIT':
-      // ตัดกรณี READY ออกจากตรงนี้ เพื่อปล่อยให้วัตถุคาตำแหน่งสะสมไว้ขยับต่อลูปถัดไป
-      // จะยอมถอยกลับมาจุดสตาร์ทก็ต่อเมื่อกดรีเซ็ตระบบเครื่องเท่านั้น
       ret('carrier_tape', 0.25/S); 
       break;
 
@@ -354,7 +351,7 @@ function addLog(msg,type='info'){
   b.appendChild(el);b.scrollTop=b.scrollHeight;
 }
 
-// ── ระบบควบคุม FSM Engine ──
+// ── ระบบ FSM Engine ──
 let current='READY', running=false, timer=null;
 let isManualMode = false; 
 let stepAllowed = false;   
@@ -461,10 +458,19 @@ window.fsmStart = function(){
 window.fsmReset = function(){
   clearTimeout(timer); running=false; stepAllowed=false;
   restoreAll(); tweens.length=0;
+  
+  // 🌟 ลูปแก้ไขคืนค่าตำแหน่งและองศาเดิมที่ถูกต้องของโมเดลจักรกล
   Object.keys(meshMap).forEach(role=>{
     const m=meshMap[role];
-    if(m&&origPos[role]){m.position.copy(origPos[role]); m.rotation.set(0,0,0);}
+    if(m && origPos[role]){
+      m.position.copy(origPos[role]); // คืนพิกัดตำแหน่งเริ่มต้น
+      
+      if(m._origRot) {
+        m.rotation.copy(m._origRot); // คืนค่าองศาการเอียงจริงจากไฟล์ GLB (ไม่บังคับเป็น 0,0,0)
+      }
+    }
   });
+  
   document.getElementById('btnStart').disabled=false;
   document.getElementById('btnStep').disabled=true;
   document.getElementById('btnReset').disabled=true;
@@ -474,7 +480,7 @@ window.fsmReset = function(){
   document.getElementById('ovState').textContent='READY';
   document.getElementById('ovState').className='ov-state';
   document.getElementById('ovDesc').textContent='Waiting for Start';
-  current='READY'; addLog('↺ Reset ระบบสถานะและตำแหน่งวัตถุกลับจุดเริ่มต้นแล้ว','warn');
+  current='READY'; addLog('↺ Reset ระบบสถานะและทิศทางวัตถุกลับจุดเริ่มต้นที่ถูกต้องแล้ว','warn');
 };
 </script>
 </body>
