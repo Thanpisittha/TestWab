@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Continuous Endless Solid Feeder)</title>
+  <title>BK05 — Digital Twin (1s Duration & Enhanced Distances)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -140,9 +140,9 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'SEAL_DOWN',  action:'[สเตป 1] หัว Sealing สับกดลงหาหน้าเทป (อย่างเดียว)'}, 
-  {id:'SEAL_UP',    action:'[สเตป 2] หัว Sealing ยกรวมกลับขึ้นพิกัดเริ่มต้น (อย่างเดียว)'}, 
-  {id:'FEED_STEP',  action:'[สเตป 3] สายพาน Cerrier เลื่อนหน้าพุ่งยาวไปเรื่อยๆ + ล้อหมุนตาม'}, 
+  {id:'SEAL_DOWN',  action:'[สเตป 1] หัว Sealing สับกดลงลึก 5 ซม. (ทำงาน 1 วินาที)'}, 
+  {id:'SEAL_UP',    action:'[สเตป 2] หัว Sealing ยกตัวคืนตำแหน่งเดิม (ทำงาน 1 วินาที)'}, 
+  {id:'FEED_STEP',  action:'[สเตป 3] สายพาน Cerrier เลื่อนหน้ายาว +2 เมตร + ล้อหมุนตาม (ทำงาน 1 วินาที)'}, 
 ];
 
 const TR = {
@@ -153,7 +153,8 @@ const TR = {
   FEED_STEP:   {auto:'SEAL_DOWN'}, 
 };
 
-const DUR = { INIT:400, READY:600, SEAL_DOWN:500, SEAL_UP:500, FEED_STEP:600 };
+// 🌟 ปรับแต่งหน่วงเวลาคอยของสเตตหลัก (SEAL_DOWN, SEAL_UP, FEED_STEP) ให้เป็น 1000ms (1 วินาที) เท่ากันหมด
+const DUR = { INIT:400, READY:600, SEAL_DOWN:1000, SEAL_UP:1000, FEED_STEP:1000 };
 
 window.speedMul = 1;
 const ms = id => (DUR[id]||400) / speedMul;
@@ -226,7 +227,7 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมแอนิเมชันแยกสเตตสมบูรณ์ ──
+// ── 🎬 ฟังก์ชันควบคุมแอนิเมชันรัน 1 วินาทีเต็มสัดส่วน ──
 function playAnim(id){
   const S = speedMul;
   const sealMesh = meshMap['sealing_head'];
@@ -234,34 +235,32 @@ function playAnim(id){
 
   switch(id){
     case 'SEAL_DOWN':
-      // [สเตป 1]: สั่งหัวซีลสับลงแนวแกน Y หาเทป Cerrier อย่างเดียว
+      // 🌟 แก้ไข: สั่งหัวซีลปั๊มกดดิ่งลงแกน Y ลึกขึ้นอีก 5 ซม. (-0.05) และปรับเวลาเล่นแอนิเมชันให้เต็ม 1.0 วินาที
       if(sealMesh && origPos['sealing_head']){
-        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.02, 0));
-        twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 0.4/S);
+        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.05, 0));
+        twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 1.0/S);
       }
       break;
 
     case 'SEAL_UP':
-      // [สเตป 2]: สั่งดึงหัวซีลกลับคืนตำแหน่งสแตนบายด้านบนอย่างเดียว
+      // 🌟 แก้ไข: ดึงหัวซีลขึ้นกลับตำแหน่งสแตนบายเดิม และใช้เวลาวิ่งแอนิเมชัน 1.0 วินาที
       if(sealMesh && origPos['sealing_head']){
-        twCustomKey('sealing_up', sealMesh, sealMesh.position, origPos['sealing_head'], 0.4/S);
+        twCustomKey('sealing_up', sealMesh, sealMesh.position, origPos['sealing_head'], 1.0/S);
       }
       break;
 
     case 'FEED_STEP':
-      // [สเตป 3]: สั่งให้ Cerrier สไลด์เลื่อนไปข้างหน้า 1 สเตปสั้น และล้อทุกล้อหมุนตามเข็มนาฬิกาพร้อมกัน
+      // 🌟 แก้ไข: เปลี่ยนการขยับฟีดรางเป็นระยะ +2 เมตรแกน Z และให้แอนิเมชันเลื่อนเนียน ๆ นาน 1.0 วินาที
       if(tapeMesh) {
-        // 🛠️ ถอดลอจิกเช็คระยะและคำสั่งวาร์ปกลับออกเรียบร้อย! 
-        // ทำให้พิกัดเป้าหมายบวกเพิ่มถัดจากพิกัดเฟรมปัจจุบัน (`tapeMesh.position`) และพุ่งหน้ายาวไปเรื่อยๆ ครับนิว
-        const nextTarget = tapeMesh.position.clone().add(new THREE.Vector3(0, 0, 0.2));
-        twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 0.5/S);
+        const nextTarget = tapeMesh.position.clone().add(new THREE.Vector3(0, 0, 2));
+        twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 1.0/S);
       }
       
-      // ล้อทุกล้อหมุนป้อนตามเข็มนาฬิกา
-      twRot('roller_feed', -Math.PI * 0.5, 0.5/S, 'x'); // Roll_1
-      twRot('feeder_block', -Math.PI * 0.5, 0.5/S, 'z'); // Feed_Cerrier
+      // ปรับเวลาหมุนล้อสัมพันธ์เป็น 1.0 วินาทีตามสเตป พร้อมเพิ่มองศาการหมุนของเฟืองให้สมดุลกับระยะทาง 2 เมตรที่พุ่งไป
+      twRot('roller_feed', -Math.PI * 2.5, 1.0/S, 'x'); // Roll_1
+      twRot('feeder_block', -Math.PI * 2.5, 1.0/S, 'z'); // Feed_Cerrier
       if (cycles % 2 === 0) {
-        twRot('roller_blue', -Math.PI * 0.5, 0.5/S, 'x'); // Roll_2 (Gear 2:1)
+        twRot('roller_blue', -Math.PI * 2.5, 1.0/S, 'x'); // Roll_2
       }
       break;
 
@@ -338,7 +337,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('feeder_block', innerMesh); 
     } else { reg('feeder_block', feederGroup); }
   }
-  addLog(`System Synchronized — Continuous Endless Feeding Engaged`,'info');
+  addLog(`System Synchronized — 1s FSM Timing Online`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
 // ── UI & Engine Logic ──
@@ -393,7 +392,7 @@ function setState(id){
     if (isManualMode) {
       stepAllowed = true;
       document.getElementById('btnStep').disabled = false;
-      addLog(`[Ready] สเตท ${id} ทำงานจบแล้ว กดปุ่ม Step เพื่อขยับขั้นถัดไป...`, 'warn');
+      addLog(`[Ready] สเตท ${id} ทำงานครบ 1 วินาทีแล้ว กดปุ่ม Step เพื่อขยับต่อ...`, 'warn');
     } else {
       triggerNextTransition();
     }
