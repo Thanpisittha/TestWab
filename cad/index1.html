@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Stable Roll Rotation Return)</title>
+  <title>BK05 — Digital Twin (Dual Stable Roll Rotation)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -136,9 +136,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// ── 🛠️ แมปชื่อระบบควบคุม: เพิ่มตัวแปรกลไกป้อนสายพาน feeder_block เข้าคู่ ──
 const PART_NAMES = {
   carrier_tape: 'Cerrier', 
   roller_feed:  'Roll_1', 
+  feeder_block: 'Feed_Cerrier', // ผูกม้วนฟีดแกนเหล็กย่อยจากในไฟล์ GLB ของนิว
 };
 
 const STATES = [
@@ -288,7 +290,7 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมการทำงานดั้งเดิมที่เสถียร ──
+// ── 🎬 ฟังก์ชันควบคุมการทำงานกลไก ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -297,11 +299,15 @@ function playAnim(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
       
-      // Cerrier สวนพุ่งหน้าทีละ 20 ซม. สะสมพิกัดเรื่อยๆ
+      // 1. Cerrier สไลด์พุ่งหน้าทีละ 20 ซม. สะสมพิกัดต่อเนื่อง
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.5/S);  
       
-      // Roll_1 ทั้งก้อนหมุนรอบศูนย์กลางตัวเองเป๊ะๆ บนระนาบแกน X ย่อย
+      // 2. Roll_1 ทั้งก้อนหมุนรอบศูนย์กลางตัวเองเป๊ะๆ บนระนาบแกน X 
       twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'x');
+
+      // 3. 🌟 Feed_Cerrier สั่งให้มันหมุนรอบตัวเองอยู่กับพิกัดเครื่องไปพร้อมๆ กันในสเตตนี้เลย!
+      // Math.PI * 0.5 คือหมุนเดินหน้า 90 องศา (ตั้งค่าเริ่มต้นรันบนแกน X เหมือนล้อแดง)
+      twRot('feeder_block', Math.PI * 0.5, 0.5/S, 'x');
       break;
 
     case 'INIT':
@@ -334,7 +340,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และจัดพิกัดชดเชยค่าเพี้ยน ──
+// ── โหลดไฟล์โมเดล Run.glb และระบบคำนวณย้ายแกน Pivot อัตโนมัติคู่ขนาน ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -358,16 +364,16 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
     if(!obj.isMesh) return;
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
-      if(role === 'roller_feed') {
+      // 🌟 ยึดลอจิกการย้ายจุดศูนย์กลางเนื้อวัตถุ (Origin Point) และล็อกค่าตำแหน่งคืนกรอบเหล็กเดิมบนเครื่อง
+      if(role === 'roller_feed' || role === 'feeder_block') {
         obj.geometry.computeBoundingBox();
         const localCenter = new THREE.Vector3();
         obj.geometry.boundingBox.getCenter(localCenter);
         
-        // รวบจุดศูนย์กลางเนื้อโมเดลภายใน และคัดระนาบพิกัดย้อนกลับไปเกาะขาเหล็กเดิมบนเครื่อง
-        obj.geometry.center();
+        obj.geometry.center(); // ดึงแกนหมุนของทั้ง Roll_1 และ Feed_Cerrier มารวมตรงกลางก้อนตัวเองไม่ให้ส่ายแกว่ง
         obj.updateMatrixWorld(true);
         localCenter.applyMatrix4(obj.matrixWorld);
-        obj.position.copy(localCenter);
+        obj.position.copy(localCenter); // ล็อกชิ้นงานทั้งสองกลับเข้าพิกัดล็อกเดิมบนตัวเครื่องเป๊ะๆ ไม่ลอยหาย
       }
       reg(role, obj); 
     }
