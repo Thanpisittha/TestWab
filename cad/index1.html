@@ -75,7 +75,7 @@
 </head>
 <body>
 <header>
-  <span class="logo">BK05</span>
+  <span class="logo">Demo</span>
   <span style="color:var(--border)">|</span>
   <span class="htitle">SMD Reel Packing — Simplified Digital Twin</span>
   <div class="hdot" id="hdot"></div>
@@ -301,7 +301,7 @@ function animate(){
 animate();
 
 // ── โหลดไฟล์โมเดล Run.glb ──
-new GLTFLoader().load('./export/Run.glb', gltf=>{
+new GLTFLoader().load('./export/Machine.glb', gltf=>{
   const model = gltf.scene; scene.add(model);
   model.traverse(obj => { if(obj.isMesh) { obj.castShadow = obj.receiveShadow = true; } });
 
