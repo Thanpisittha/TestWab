@@ -138,7 +138,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบกึ่งกลางตัวเองอยู่กับที่'}, 
+  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบแนวเครื่องจักรอยู่กับที่'}, 
 ];
 
 const TR = {
@@ -224,7 +224,7 @@ function twRot(role,deltaRot,durSec,axis='x',onDone=null){
   document.getElementById('animTag').style.display='block';
 }
 
-// 🌟 ระบบคุมแอนิเมชันคำนวณการหมุนรอบแกน Local ตัวเองแบบกำหนดเอง (Custom Local Pivot Rotation)
+// 🌟 ระบบคุมแอนิเมชันสำหรับ Feed_Cerrier: หมุนกลิ้งรอบแกนเครื่องจักรโดยตรงพิกัดนิ่งไม่ส่ายข้ามโลก
 function twLocalAxisRot(role, deltaRot, durSec) {
   const mesh = meshMap[role]; if(!mesh) return;
   const key = role+'_local_axis_r';
@@ -269,9 +269,8 @@ function playAnim(id){
       // 2. Roll_1 หมุนรอบแกนตัวเองอยู่กับที่ตรงพิกัดเดิมเป๊ะ (แกน X ท้องถิ่น)
       twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. 🌟 Feed_Cerrier สั่งแอนิเมชันหมุนรอบแกน Local ตัวเองร้อยเปอร์เซ็นต์
-      // โดยตัวโครงสร้างบอดี้จะตั้งตรงล็อกพิกัดเดิมตาม Blender ไม่แกว่งเป็นวงกลมใหญ่อีกแล้วครับนิว!
-      twLocalAxisRot('feeder_block', Math.PI * 0.5, 0.6/S, 'x');
+      // 3. Feed_Cerrier สั่งแอนิเมชันหมุนรอบตัวเอง สอดคล้องกับแนว Roll_1
+      twLocalAxisRot('feeder_block', Math.PI * 0.5, 0.6/S);
       break;
 
     case 'INIT':
@@ -291,14 +290,18 @@ function animate(){
     const p=Math.min(t.elapsed/t.dur,1), ep=ease(p);
     
     if(t.isLocalAxisRot) {
-      // 🌟 บล็อกคำสั่งการคำนวณการหมุนกลิ้งรอบแกนกลางตัวเองในมิติ Local พิกัดไม่เคลื่อนที่
+      // 🌟 🌟 บล็อกแก้ไขแกนหมุนให้ขนานเครื่องจักร 100% 🌟 🌟
       const currentProgress = ep;
       const lastProgress = ease(Math.min((t.elapsed - dt)/t.dur, 1));
       const deltaAngle = t.totalAngle * (currentProgress - lastProgress);
       
-      // ใช้เวกเตอร์ชี้ทิศแนวแกนของตัวมันเอง (เช่นแกน X หรือเปลี่ยนเป็นแนวระนาบอื่นได้ที่นี่)
-      // สั่งให้ตัวชิ้นงานลูกข่ายหมุนรอบทิศทางตัวเองเป๊ะๆ อยู่กับที่
-      t.mesh.rotateOnAxis(new THREE.Vector3(1, 0, 0), deltaAngle);
+      // 🛠️ ปรับสมการเด็ด: ดึงทิศทางแกน X ของโลก (World X Axis) 
+      // นำมาแปลงความสัมพันธ์ระดับ Matrix เข้าสู่ท้องถิ่นชิ้นงาน (Object Local Space)
+      // ช่วยให้ชิ้นงานหมุนกลิ้งหน้า-หลัง ขนานแนวเดียวกับล้อแดง Roll_1 เป๊ะ โดยไม่ส่ายเฉียงอีกแล้วครับ!
+      const worldX = new THREE.Vector3(1, 0, 0);
+      const localAxis = t.mesh.worldToLocal(worldX.clone()).normalize();
+      
+      t.mesh.rotateOnAxis(localAxis, deltaAngle);
     }
     else if(t.isRot) {
       t.mesh.rotation[t.rotAxis||'x'] = t.fromRot + (t.toRot - t.fromRot) * ep;
@@ -314,7 +317,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และจัดพิกัดจุดติดตั้งแท้ 100% จาก Blender ──
+// ── โหลดไฟล์โมเดล Run.glb และคัดกรองพิกัดติดตั้งจาก Blender ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -349,8 +352,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('roller_feed', obj);
     } 
     else if (obj.name === PART_NAMES.feeder_block) {
-      // 🛠️ ล็อกแกน Feed_Cerrier คืนตำแหน่งเป๊ะ 100% 🛠️
-      // เราดึง Mesh ชิ้นงานย่อยข้างในกลุ่มขึ้นมาหาจุดศูนย์กลางของเนื้อวัตถุแท้ๆ แล้วล็อกไว้ที่พิกัดเดิมตาม Blender
+      // ดึงชิ้นส่วนย่อยข้างในมาทำการเซ็ตติ้งจุดศูนย์กลาง (Pivot Center)
       let innerMesh = null;
       obj.traverse(child => { if(child.isMesh && !innerMesh) innerMesh = child; });
       
@@ -359,10 +361,10 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
         const innerCenter = new THREE.Vector3();
         innerMesh.geometry.boundingBox.getCenter(innerCenter);
         
-        innerMesh.geometry.center(); // รวบขอบเขต Vertex มารวมตรงกึ่งกลางตัวเองเพื่อทำจุดหมุนเป๊ะๆ รอบตัวเอง
-        innerMesh.position.add(innerCenter); // บวกชดเชยคืนกลับเข้าล็อกพิกัดประกอบเครื่องจักรดั้งเดิม
+        innerMesh.geometry.center(); // รวบแกนภายในลูกขยายมาตรงกลางก้อนตัวเองเป๊ะ
+        innerMesh.position.add(innerCenter); // ล็อกชดเชยค่า Offset ไม่ให้ย้ายพิกัดติดตั้งจาก Blender
         
-        reg('feeder_block', innerMesh); // ส่งชิ้นในนี้ไปผูกแอนิเมชันหมุนรอบตัวเองอยู่กับที่
+        reg('feeder_block', innerMesh); 
       } else {
         reg('feeder_block', obj);
       }
