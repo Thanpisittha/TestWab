@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Strict 3-Step FSM Sequence)</title>
+  <title>BK05 — Digital Twin (Continuous Endless Solid Feeder)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -137,25 +137,22 @@ const PART_NAMES = {
   sealing_head: 'Sealing', 
 };
 
-// 🌟 🌟 แตก FSM States แยกออกจากกันตามที่นิวสั่งเด็ดขาด 🌟 🌟
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
   {id:'SEAL_DOWN',  action:'[สเตป 1] หัว Sealing สับกดลงหาหน้าเทป (อย่างเดียว)'}, 
-  {id:'SEAL_UP',    action:'[สเตป 2] หัว Sealing ยกกลับขึ้นพิกัดเริ่มต้น (อย่างเดียว)'}, 
-  {id:'FEED_STEP',  action:'[สเตป 3] สายพาน Cerrier เลื่อน 1 สเตป + ล้อทุกล้อหมุนตาม'}, 
+  {id:'SEAL_UP',    action:'[สเตป 2] หัว Sealing ยกรวมกลับขึ้นพิกัดเริ่มต้น (อย่างเดียว)'}, 
+  {id:'FEED_STEP',  action:'[สเตป 3] สายพาน Cerrier เลื่อนหน้าพุ่งยาวไปเรื่อยๆ + ล้อหมุนตาม'}, 
 ];
 
-// กำหนดทิศทางการไหลของลอจิกอัตโนมัติ (FSM Transition Matrix)
 const TR = {
   INIT:        {auto:'READY'},
   READY:       {auto:'SEAL_DOWN'},
   SEAL_DOWN:   {auto:'SEAL_UP'}, 
   SEAL_UP:     {auto:'FEED_STEP'}, 
-  FEED_STEP:   {auto:'SEAL_DOWN'}, // วนลูปกลับไปเริ่มกดใหม่
+  FEED_STEP:   {auto:'SEAL_DOWN'}, 
 };
 
-// กำหนดหน่วงเวลาแอนิเมชันของแต่ละสเตตแยกอิสระ (มิลลิวินาที)
 const DUR = { INIT:400, READY:600, SEAL_DOWN:500, SEAL_UP:500, FEED_STEP:600 };
 
 window.speedMul = 1;
@@ -229,7 +226,7 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมแอนิเมชันตามสเตต FSM (Strict Step Animation Dispatcher) ──
+// ── 🎬 ฟังก์ชันควบคุมแอนิเมชันแยกสเตตสมบูรณ์ ──
 function playAnim(id){
   const S = speedMul;
   const sealMesh = meshMap['sealing_head'];
@@ -237,7 +234,7 @@ function playAnim(id){
 
   switch(id){
     case 'SEAL_DOWN':
-      // 🌟 [สเตป 1]: สั่งหัวซีลขยับกดลงแกน Y หาเนื้อเทปอย่างเดียว
+      // [สเตป 1]: สั่งหัวซีลสับลงแนวแกน Y หาเทป Cerrier อย่างเดียว
       if(sealMesh && origPos['sealing_head']){
         const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.02, 0));
         twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 0.4/S);
@@ -245,29 +242,26 @@ function playAnim(id){
       break;
 
     case 'SEAL_UP':
-      // 🌟 [สเตป 2]: สั่งดึงหัวซีลกลับคืนตำแหน่งเดิมด้านบนอย่างเดียวร้อยเปอร์เซ็นต์
+      // [สเตป 2]: สั่งดึงหัวซีลกลับคืนตำแหน่งสแตนบายด้านบนอย่างเดียว
       if(sealMesh && origPos['sealing_head']){
         twCustomKey('sealing_up', sealMesh, sealMesh.position, origPos['sealing_head'], 0.4/S);
       }
       break;
 
     case 'FEED_STEP':
-      // 🌟 [สเตป 3]: รางเทป Cerrier เริ่มสไลด์หน้า 1 สเตป พร้อมให้กลไกม้วนล้อทุกล้อหมุนป้อนสัมพันธ์กัน
-      if(tapeMesh && origPos['carrier_tape']) {
-        // ดักลูปสายพานไม่ให้ไหลเตลิด: ถ้ารอบปัจจุบันยื่นเลยระยะฟีดกำหนด ให้ดีดวาร์ปกลับหลังเงียบๆ ก่อนสไลด์รอบใหม่
-        let currentDistance = tapeMesh.position.z - origPos['carrier_tape'].z;
-        if (currentDistance > 0.4) {
-          tapeMesh.position.copy(origPos['carrier_tape']);
-        }
-        // เลื่อนป้อนหน้าแกน Z ระยะ 20 ซม.
-        twCustomKey('carrier_move', tapeMesh, tapeMesh.position, tapeMesh.position.clone().add(new THREE.Vector3(0, 0, 0.2)), 0.5/S);
+      // [สเตป 3]: สั่งให้ Cerrier สไลด์เลื่อนไปข้างหน้า 1 สเตปสั้น และล้อทุกล้อหมุนตามเข็มนาฬิกาพร้อมกัน
+      if(tapeMesh) {
+        // 🛠️ ถอดลอจิกเช็คระยะและคำสั่งวาร์ปกลับออกเรียบร้อย! 
+        // ทำให้พิกัดเป้าหมายบวกเพิ่มถัดจากพิกัดเฟรมปัจจุบัน (`tapeMesh.position`) และพุ่งหน้ายาวไปเรื่อยๆ ครับนิว
+        const nextTarget = tapeMesh.position.clone().add(new THREE.Vector3(0, 0, 0.2));
+        twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 0.5/S);
       }
       
-      // ล้อทุกล้อป้อนหมุนตามเข็มนาฬิกา
-      twRot('roller_feed', -Math.PI * 0.5, 0.5/S, 'x'); // Roll_1 (ล้อแดงขวา)
-      twRot('feeder_block', -Math.PI * 0.5, 0.5/S, 'z'); // Feed_Cerrier (ม้วนขาวกลาง รอบแกน Z)
+      // ล้อทุกล้อหมุนป้อนตามเข็มนาฬิกา
+      twRot('roller_feed', -Math.PI * 0.5, 0.5/S, 'x'); // Roll_1
+      twRot('feeder_block', -Math.PI * 0.5, 0.5/S, 'z'); // Feed_Cerrier
       if (cycles % 2 === 0) {
-        twRot('roller_blue', -Math.PI * 0.5, 0.5/S, 'x'); // Roll_2 (ล้อน้ำเงิน Gear 2:1)
+        twRot('roller_blue', -Math.PI * 0.5, 0.5/S, 'x'); // Roll_2 (Gear 2:1)
       }
       break;
 
@@ -294,17 +288,6 @@ function animate(){
     if(p>=1){ if(t.onDone) t.onDone(); tweens.splice(i,1); }
   }
 
-  // เคลียร์ผลสะสมระยะฟูปคงคลังใน Render Loop ออก
-  const tapeMesh = meshMap['carrier_tape'];
-  if (tapeMesh && origPos['carrier_tape']) {
-    let distanceMoved = tapeMesh.position.z - origPos['carrier_tape'].z;
-    if (distanceMoved > 0.4) {
-      tapeMesh.traverse(child => { if (child.isMesh && child.material) child.material.opacity = Math.max(0, 1 - (distanceMoved - 0.4) * 4); });
-    } else {
-      tapeMesh.traverse(child => { if (child.isMesh && child.material) child.material.opacity = 1.0; });
-    }
-  }
-
   if(tweens.length===0) document.getElementById('animTag').style.display='none';
   renderer.render(scene,camera);
 }
@@ -323,16 +306,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   
   let feederGroup = null;
   model.traverse(obj => {
-    if (obj.name === PART_NAMES.carrier_tape) {
-      obj.traverse(child => {
-        if (child.isMesh && child.material) {
-          child.material = child.material.clone(); 
-          child.material.transparent = true;
-          child.material.opacity = 1.0;
-        }
-      });
-      reg('carrier_tape', obj);
-    }
+    if (obj.name === PART_NAMES.carrier_tape) reg('carrier_tape', obj);
     else if (obj.name === PART_NAMES.sealing_head) reg('sealing_head', obj);
     else if (obj.name === PART_NAMES.roller_feed) {
       obj.geometry.computeBoundingBox();
@@ -364,10 +338,10 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('feeder_block', innerMesh); 
     } else { reg('feeder_block', feederGroup); }
   }
-  addLog(`FSM Multi-State Loaded — Manual 3-Step Sequence Ready`,'info');
+  addLog(`System Synchronized — Continuous Endless Feeding Engaged`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
-// ── UI Generation ──
+// ── UI & Engine Logic ──
 const sl=document.getElementById('statesList');
 STATES.forEach(s=>{
   const el=document.createElement('div'); el.className='si'; el.id='si_'+s.id;
@@ -382,7 +356,6 @@ function addLog(msg,type='info'){
   b.appendChild(el); b.scrollTop=b.scrollHeight;
 }
 
-// ── ระบบ FSM Control Engine ──
 let current='READY', running=false, timer=null, isManualMode = false, stepAllowed = false, cycles=0;
 
 window.switchMode = function(mode) {
@@ -391,7 +364,7 @@ window.switchMode = function(mode) {
   document.getElementById('btnModeAuto').classList.toggle('active-mode', !isManualMode);
   document.getElementById('speedRow').style.opacity = isManualMode ? '0.4' : '1';
   document.getElementById('btnStep').disabled = !(running && isManualMode && stepAllowed);
-  addLog(isManualMode ? '🕹️ Manual Mode (กดปุ่ม Step เพื่อขยับทีละสเตป)' : '🤖 Auto Mode', isManualMode ? 'warn' : 'info');
+  addLog(isManualMode ? '🕹️ Manual Mode' : '🤖 Auto Mode', isManualMode ? 'warn' : 'info');
   
   if(!isManualMode && running && stepAllowed) {
     stepAllowed = false;
@@ -409,14 +382,13 @@ function setState(id){
   const dot=document.getElementById('hdot'), hs=document.getElementById('hstatus');
   dot.className = running ? 'hdot run' : 'hdot'; hs.textContent = running ? 'Running' : 'Idle';
   
-  playAnim(id); // กระตุ้นแอนิเมชันตามสเตตปัจจุบัน
+  playAnim(id);
   
   addLog('→ '+id, 'info');
   if(id==='FEED_STEP') { cycles++; document.getElementById('cCycles').textContent=cycles; }
   
   if(!running) return;
 
-  // หน่วงเวลารอให้แอนิเมชันในสเตตนั้นทำเสร็จ
   timer = setTimeout(() => {
     if (isManualMode) {
       stepAllowed = true;
