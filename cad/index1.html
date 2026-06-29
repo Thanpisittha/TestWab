@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Independent Dual Roll Rotation)</title>
+  <title>BK05 — Digital Twin (Perfect Locked Position Demo)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -232,13 +232,6 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-const hlMat = new THREE.MeshStandardMaterial({
-  color: 0x00ffcc,       
-  emissive: 0x00aa66,    
-  roughness: 0.1,
-  metalness: 0.1
-});
-
 function hl(role,mat){const m=meshMap[role];if(m){m.material=mat;}}
 function restoreAll(){
   Object.keys(meshMap).forEach(r=>{
@@ -255,16 +248,14 @@ function playAnim(id){
   switch(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
-      hl('roller_feed', hlMat);
-      hl('feeder_block', hlMat);
       
-      // 1. Cerrier เลื่อนหน้าไปตามราง (แกน Z)
+      // 1. Cerrier เลื่อนหน้าตามรางพิกัดเดิมสะสมเรื่อยๆ (แกน Z)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 หมุนรอบตัวเองอยู่กับที่เป๊ะๆ บนระนาบแกน X 
+      // 2. Roll_1 หมุนรอบแกนกลางตัวเองอยู่กับพิกัดเครื่องเดิมเป๊ะ (แกน X)
       twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. 🌟 Feed_Cerrier สั่งหมุนรอบแกนกลางของตัวเองอยู่กับร่องเหล็กเดิม ไม่แกว่งอ้อมรอบล้ออื่นแล้ว!
+      // 3. 🌟 Feed_Cerrier สั่งแอนิเมชันหมุนรอบตัวเองที่แกน X ท้องถิ่นของตัวมันเองแล้วครับ!
       twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'x');
       break;
 
@@ -294,7 +285,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และแก้ไขลอจิกคํานวณย้าย Pivot ระดับลูกข่ายย่อยดักบั๊ก ──
+// ── โหลดไฟล์โมเดล Run.glb และล็อกตำแหน่งดั้งเดิมจาก Blender ไว้ 100% ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -315,33 +306,32 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.update();
   
   model.traverse(obj => {
-    // แก้ไขดักฟิลเตอร์: ยอมรับทั้งวัตถุที่เป็นชิ้นเดี่ยว (Mesh) และก้อนวัตถุที่ครอบอยู่
+    if(!obj.isMesh) return;
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
       
-      // 🛠️ 🛠️ คีย์หลักการแก้ไข: บังคับเจาะลึกลงไปหาชิ้น Geometry เพื่อสั่งย้าย Pivot มาไว้ตรงกลางก้อนวัตถุของตัวมันเองเด็ดขาด
-      if(role === 'roller_feed' || role === 'feeder_block') {
+      // 🛠️ 🛠️ จุดประมวลผลล็อกพิกัด 🛠️ 🛠️
+      if(role === 'roller_feed') {
+        // แก้ไข Roll_1 ที่เป็นชิ้นงานเดี่ยวโดยการรวบ Geometry เพื่อความนิ่ง
+        obj.geometry.computeBoundingBox();
+        const localCenter = new THREE.Vector3();
+        obj.geometry.boundingBox.getCenter(localCenter);
+        obj.geometry.center(); 
+        obj.updateMatrixWorld(true);
+        localCenter.applyMatrix4(obj.matrixWorld);
+        obj.position.copy(localCenter);
         
-        // ค้นหา Mesh จริงที่ซ่อนตัวอยู่ข้างในโครงสร้าง เพื่อดึงบัฟเฟอร์พิกัดมาคำนวณจุดกึ่งกลาง
-        let targetMesh = obj;
-        if(!obj.isMesh) {
-          obj.traverse(child => { if(child.isMesh && !targetMesh.geometry) targetMesh = child; });
-        }
+      } else if (role === 'feeder_block') {
+        // 🌟 🌟 สำหรับ Feed_Cerrier: เราบังคับย้ายจุดศูนย์กลางของโพลีกอนภายใน (Geometry) มารวมตรงกลางก้อนวัตถุ
+        // แต่ "ห้ามดัดแปลงแก้ไขค่า position ภายนอกหลักเด็ดขาด" เพื่อให้พิกัดติดตั้งจอดตรงล็อกเดิมเป๊ะๆ ไม่เคลื่อนหลุดเฟรม 🌟 🌟
+        obj.geometry.computeBoundingBox();
+        const localCenter = new THREE.Vector3();
+        obj.geometry.boundingBox.getCenter(localCenter);
         
-        if(targetMesh && targetMesh.geometry) {
-          targetMesh.geometry.computeBoundingBox();
-          const localCenter = new THREE.Vector3();
-          targetMesh.geometry.boundingBox.getCenter(localCenter);
-          
-          // สั่งจัดจุด Origin ของโมเดลให้มาอยู่จุดกึ่งกลางเนื้อตัวเองแท้ๆ สกัดกั้นการแกว่งควงข้ามแกน
-          targetMesh.geometry.center();
-          
-          // นำค่า Matrix ระยะเอียงดั้งเดิมจาก Blender คำนวณชดเชยคืนให้ตำแหน่งหลักเพื่อให้ล็อกสนิทเข้าพิกัดโครงสร้างเดิม
-          obj.updateMatrixWorld(true);
-          localCenter.applyMatrix4(obj.matrixWorld);
-          obj.position.copy(localCenter);
-        }
+        obj.geometry.center(); // ดึงแกน Origin ท้องถิ่นมาอยู่จุดกึ่งกลางเนื้อวัตถุตัวเองเพื่อเป็นจุดหมุน
+        obj.position.add(localCenter); // เลื่อนชดเชยค่า Offset ภายใน เพื่อล็อกตำแหน่งสัมบูรณ์ไว้ที่เดิมบนแท่นเครื่อง Farm
       }
+      
       reg(role, obj); 
     }
   });
