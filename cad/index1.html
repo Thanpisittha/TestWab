@@ -298,7 +298,7 @@ function animate(){
       // 🛠️ ปรับสมการเด็ด: ดึงทิศทางแกน X ของโลก (World X Axis) 
       // นำมาแปลงความสัมพันธ์ระดับ Matrix เข้าสู่ท้องถิ่นชิ้นงาน (Object Local Space)
       // ช่วยให้ชิ้นงานหมุนกลิ้งหน้า-หลัง ขนานแนวเดียวกับล้อแดง Roll_1 เป๊ะ โดยไม่ส่ายเฉียงอีกแล้วครับ!
-      const worldX = new THREE.Vector3(0, 0, 1);
+      const worldX = new THREE.Vector3(0, 1, 0);
       const localAxis = t.mesh.worldToLocal(worldX.clone()).normalize();
       
       t.mesh.rotateOnAxis(localAxis, deltaAngle);
