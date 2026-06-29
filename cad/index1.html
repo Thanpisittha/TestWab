@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Strict Sequential Sealing & Feeding)</title>
+  <title>BK05 — Digital Twin (Perfect Sealing Sequence V3)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -140,7 +140,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'Sealing กดลง ➡️ ยกขึ้นเสร็จ ➡️ Cerrier เลื่อน 1 สเตป + ล้อหมุนป้อน'}, 
+  {id:'INDEX',      action:'[Sequence] 1. กดลงโดนเทป ➡️ 2. ยกขึ้นตำแหน่งเดิม ➡️ 3. Cerrier เลื่อน 1 สเตป'}, 
 ];
 
 const TR = {
@@ -149,8 +149,8 @@ const TR = {
   INDEX:       {auto:'INDEX'}, 
 };
 
-// ขยายเวลาสเตท INDEX เป็น 1400ms เพื่อรองรับช่วงเวลา Sealing ทำงานจบ แล้วปล่อยให้ Cerrier วิ่งต่อจนจบกระบวนการ
-const DUR = { INIT:400, READY:600, INDEX:1400 };
+// ขยายเวลาประมวลผลสเตทให้ยาวขึ้นเป็น 1600ms เพื่อให้สอดคล้องกับแอนิเมชันที่ทำทีละขั้นตอนอย่างสมบูรณ์
+const DUR = { INIT:400, READY:600, INDEX:1600 };
 
 window.speedMul = 1;
 const ms = id => (DUR[id]||400) / speedMul;
@@ -199,6 +199,14 @@ function tw(role,delta,durSec,onDone=null){
   document.getElementById('animTag').style.display='block';
 }
 
+// ฟังก์ชันเฉพาะเจาะจงสำหรับการดึงชิ้นส่วนกลับพิกัดดั้งเดิม (Absolute Position) ป้องกันพิกัดไหลเพี้ยน
+function twToOrigin(role,durSec,onDone=null){
+  const mesh=meshMap[role]; if(!mesh||!origPos[role]) return;
+  const i=tweens.findIndex(t=>t.role===role); if(i>-1) tweens.splice(i,1);
+  tweens.push({role,mesh,from:mesh.position.clone(),to:origPos[role].clone(),dur:durSec,elapsed:0,onDone});
+  document.getElementById('animTag').style.display='block';
+}
+
 function twRot(role,deltaRot,durSec,axis='x',onDone=null){
   const mesh=meshMap[role]; if(!mesh) return;
   const key=role+'_r';
@@ -226,34 +234,34 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันจัดคิวแอนิเมชันแบบเรียงลำดับขั้นตอนเด็ดขาด (Strict Sequential Logic) ──
+// ── 🎬 ฟังก์ชันจัดคิวแอนิเมชันของระบบเครื่องจักร (Strict Step Sequence Control) ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
 
   switch(id){
     case 'INDEX':
-      // 1. สั่ง Sealing กดลงมาโดน Cerrier (ใช้เวลา 0.4 วินาที) ตอนที่ทุกอย่างยังนิ่งสนิท
+      // [จังหวะที่ 1]: สั่ง Sealing กดดิ่งลงแกน Y เป็นระยะ -0.02 เมตร ไปโดน Cerrier (ใช้เวลา 0.4 วินาที)
       tw('sealing_head', new THREE.Vector3(0, -0.02, 0), 0.4/S, () => {
         
-        // 2. พอกดโดนเทปเสร็จเรียบร้อย สั่งให้ Sealing ยกตัวกลับขึ้นไปด้านบนจนสุด (ใช้เวลาอีก 0.4 วินาที)
-        // **จังหวะนี้ ล้อและสายพาน Cerrier ก็ยังคงนิ่งสนิทอยู่**
-        tw('sealing_head', new THREE.Vector3(0, 0.02, 0), 0.4/S, () => {
+        // [จังหวะที่ 2]: พอกดโดนหน้าเทปเสร็จปุ๊บ สั่งยกดึงกลับขึ้นพิกัดเดิม (Origin Position) ทันที (ใช้เวลา 0.4 วินาที)
+        // **ในช่วงนี้ ราง Cerrier และล้อทุกล้อยังคงจอดนิ่งสนิท 100%**
+        twToOrigin('sealing_head', 0.4/S, () => {
           
-          // 3. 🌟 พอยกหัวซีลเสร็จเรียบร้อย 100% แล้ว (หัวซีลอยู่ด้านบนนิ่งแล้ว) 🌟
-          // ถึงจะสั่งให้ Cerrier เลื่อนหน้า 1 สเตป พร้อมกับม้วนล้อทุกล้อหมุนป้อนตามมาครับนิว!
-          addLog('⚡ Sealing lifted safely ➡️ Moving Cerrier 1 Step & Rotating Rolls', 'warn');
+          // [จังหวะที่ 3]: หัวซีลยกกลับขึ้นไปอยู่ตำแหน่งเดิมด้านบนอย่างปลอดภัยสมบูรณ์แล้ว
+          // เริ่มปล่อยคำสั่งเลื่อนป้อนกลไกแนวรางและล้อขยับเลื่อน 1 สเต็ปทันที (ใช้เวลา 0.6 วินาที)
+          addLog('🚀 Sealing lifted safely ➡️ Moving Cerrier 1 Step Forward', 'warn');
 
-          // Cerrier เลื่อนหน้าตามแนวรางแกน Z ทีละ 20 เซนติเมตร (ใช้เวลา 0.6 วินาที)
+          // Cerrier เลื่อนหน้าตามแนวรางแกน Z ทีละ 20 เซนติเมตร
           tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
           
-          // Roll_1 หมุนตามเข็มนาฬิกา
+          // Roll_1 หมุนตามเข็มนาฬิกาป้อนฝาเทป
           twRot('roller_feed', -Math.PI * 0.5, 0.6/S, 'x');
 
-          // Feed_Cerrier หมุนรอบแกน Z ตามเข็มนาฬิกาอยู่กับที่
+          // Feed_Cerrier หมุนรอบแกน Z ตามเข็มนาฬิกา
           twRot('feeder_block', -Math.PI * 0.5, 0.6/S, 'z');
 
-          // Roll_2 หมุนตามเข็มนาฬิกาแบบ Gear 2:1
+          // Roll_2 หมุนตามเข็มนาฬิกาแบบ อัตราทดรอบ Gear 2:1
           if (cycles % 2 === 0) {
             twRot('roller_blue', -Math.PI * 0.5, 0.6/S, 'x');
           }
@@ -284,7 +292,7 @@ function animate(){
     if(p>=1){ if(t.onDone) t.onDone(); tweens.splice(i,1); }
   }
 
-  // ระบบลูปรีเซ็ตตำแหน่ง Cerrier กลับจุดสตาร์ทเมื่อขยับไปไกล (Fade Out จางหายวนรอบ)
+  // ระบบลูปคำนวณระยะเลื่อนของ Cerrier และวาร์ปกลับจุดเริ่มต้น (Fade Out)
   const tapeMesh = meshMap['carrier_tape'];
   if (tapeMesh && origPos['carrier_tape']) {
     let distanceMoved = tapeMesh.position.z - origPos['carrier_tape'].z;
@@ -368,7 +376,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('feeder_block', innerMesh); 
     } else { reg('feeder_block', feederGroup); }
   }
-  addLog(`System Upgraded — Strict Sequential Logic Active`,'info');
+  addLog(`System Synchronized — Precise Step Sequence Engaged`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
 // ── UI & Engine Logic ──
