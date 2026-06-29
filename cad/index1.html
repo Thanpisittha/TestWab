@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Synced Feed_Cerrier Rotation Like Roll_1)</title>
+  <title>BK05 — Digital Twin (Perfect Position & Sync Rotation)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -138,7 +138,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบแนวตัวเองเหมือน Roll_1'}, 
+  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบแกนแนวขวางล็อกพิกัดตรงเป๊ะ'}, 
 ];
 
 const TR = {
@@ -205,7 +205,6 @@ function tw(role,delta,durSec,onDone=null){
   document.getElementById('animTag').style.display='block';
 }
 
-// 🌟 ปรับปรุงระบบแอนิเมชันให้สามารถสั่งหมุนรอบแกนที่กำหนดได้นิ่ง 100%
 function twRot(role,deltaRot,durSec,axis='x',onDone=null){
   const mesh=meshMap[role]; if(!mesh) return;
   const key=role+'_r';
@@ -221,6 +220,24 @@ function twRot(role,deltaRot,durSec,axis='x',onDone=null){
     dur: durSec,
     elapsed: 0,
     onDone
+  });
+  document.getElementById('animTag').style.display='block';
+}
+
+// 🌟 ระบบเพิ่มเติ่มพิเศษสำหรับ Feed_Cerrier: แอนิเมชันหมุนวัตถุรอบแกนขวางของโลก (World X-Axis) 
+// เพื่อบังคับให้ทิศทางขนานไปกับเครื่องจักร 100% โดยไม่ทำให้พิกัดตำแหน่งหลักเพี้ยนหลุดเฟรม
+function twWorldRotX(role, deltaRot, durSec) {
+  const mesh = meshMap[role]; if(!mesh) return;
+  const key = role+'_world_r';
+  const i = tweens.findIndex(t=>t.role===key); if(i>-1) tweens.splice(i,1);
+
+  tweens.push({
+    role: key,
+    mesh,
+    isWorldRotX: true,
+    totalAngle: deltaRot,
+    dur: durSec,
+    elapsed: 0
   });
   document.getElementById('animTag').style.display='block';
 }
@@ -250,12 +267,11 @@ function playAnim(id){
       // 1. Cerrier เลื่อนไปข้างหน้าตามราง (แกน Z)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 หมุนรอบแกนแนวขวาง (แกน X)
+      // 2. Roll_1 หมุนรอบแกนแนวขวาง (แกน X Local)
       twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. 🌟 Feed_Cerrier สั่งหมุนรอบตัวเองในแนวเดียวกับ Roll_1 เป๊ะๆ แล้วครับนิว!
-      // ใช้ลอจิกเดียวกัน บังคับแกน X และตำแหน่งไม่เลื่อนหลุดแน่นอน
-      twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'x');
+      // 3. 🌟 Feed_Cerrier ใช้คำสั่งพิเศษหมุนขนานแกน X โลก ล็อกตำแหน่ง Blender เป๊ะ ไม่ขยับเยื้อง!
+      twWorldRotX('feeder_block', Math.PI * 0.5, 0.6/S);
       break;
 
     case 'INIT':
@@ -274,17 +290,30 @@ function animate(){
     const t=tweens[i]; t.elapsed+=dt;
     const p=Math.min(t.elapsed/t.dur,1), ep=ease(p);
     
-    if(t.isRot) t.mesh.rotation[t.rotAxis||'x'] = t.fromRot + (t.toRot - t.fromRot) * ep;
-    else t.mesh.position.lerpVectors(t.from,t.to,ep);
+    if(t.isWorldRotX) {
+      // 🌟 บล็อกคำสั่งคำนวณแอนิเมชันการหมุนรอบแกนโลก โดยไม่ยุ่งกับพิกัด Position หลักของโมเดล
+      const currentProgress = ep;
+      const lastProgress = ease(Math.min((t.elapsed - dt)/t.dur, 1));
+      const deltaAngle = t.totalAngle * (currentProgress - lastProgress);
+      
+      // หมุนรอบแกน X ของโลกผ่าน Center Point โดยตรงตำแหน่งไม่ขยับ
+      t.mesh.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), deltaAngle);
+    }
+    else if(t.isRot) {
+      t.mesh.rotation[t.rotAxis||'x'] = t.fromRot + (t.toRot - t.fromRot) * ep;
+    }
+    else {
+      t.mesh.position.lerpVectors(t.from,t.to,ep);
+    }
     
-    if(p>=1){if(t.onDone)t.onDone();tweens.splice(i,1);}
+    if(p>=1){tweens.splice(i,1);}
   }
   if(tweens.length===0) document.getElementById('animTag').style.display='none';
   renderer.render(scene,camera);
 }
 animate();
 
-// ── โหลดโมเดลและจัดการประมวลผล Pivot จุดหมุนให้อยู่กึ่งกลางชิ้นงาน ──
+// ── โหลดไฟล์โมเดล Run.glb ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -319,29 +348,9 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('roller_feed', obj);
     } 
     else if (obj.name === PART_NAMES.feeder_block) {
-      // 🛠️ แก้ไขโครงสร้างกลุ่มวัตถุ Feed_Cerrier:
-      // เราจะเคลียร์ค่า Rotation ของตัว Group แม่ให้เป็นศูนย์ก่อน เพื่อล้างค่า Matrix ที่เพี้ยนมาจาก Blender
-      // จากนั้นดึงตัว Mesh ย่อยข้างในออกมาคำนวณหาจุดกึ่งกลางของวัตถุแท้ ๆ แล้วล็อกตำแหน่งให้ตรงบล็อกเดิม 100%
-      let innerMesh = null;
-      obj.traverse(child => { if(child.isMesh && !innerMesh) innerMesh = child; });
-      
-      if(innerMesh && innerMesh.geometry) {
-        // ล้างค่าเอียงของกลุ่มเพื่อให้ทิศทางแกน X สอดคล้องกับแกนหลักของเครื่องจักร
-        obj.rotation.set(0, 0, 0); 
-        
-        innerMesh.geometry.computeBoundingBox();
-        const innerCenter = new THREE.Vector3();
-        innerMesh.geometry.boundingBox.getCenter(innerCenter);
-        innerMesh.geometry.center(); // ย้ายจุดศูนย์กลางเหล็กมารอรับแรงหมุนรอบแกน X
-        
-        innerMesh.updateMatrixWorld(true);
-        innerCenter.applyMatrix4(innerMesh.matrixWorld);
-        innerMesh.position.copy(innerCenter);
-        
-        reg('feeder_block', innerMesh); 
-      } else {
-        reg('feeder_block', obj);
-      }
+      // 🌟 🌟 ปล่อยตัว Group แม่ไว้ที่พิกัดเดิมจาก Blender ชัวร์ 100% 
+      // ไม่ย้ายกึ่งกลาง (Geometry Center) ของมัน ไม่ล้างค่า Rotation เพื่อไม่ให้ตำแหน่งเลื่อนหลุด
+      reg('feeder_block', obj); 
     }
   });
   
