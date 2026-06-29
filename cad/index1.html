@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Standard Endless Feeding)</title>
+  <title>BK05 — Digital Twin (Perfect Sealing & Feeding Sequence)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -140,7 +140,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'Rolls หมุนตามเข็ม | Sealing กด-ยก | Cerrier เลื่อนหน้ายาวต่อเนื่อง'}, 
+  {id:'INDEX',      action:'[คิว 1] Sealing กดลง-ยกขึ้นเสร็จ ➡️ [คิว 2] Cerrier ขยับเลื่อนหน้า + Rolls หมุนป้อน'}, 
 ];
 
 const TR = {
@@ -149,7 +149,8 @@ const TR = {
   INDEX:       {auto:'INDEX'}, 
 };
 
-const DUR = { INIT:400, READY:600, INDEX:1000 };
+// ขยายเวลาสเตท INDEX เป็น 1400ms เพื่อให้ครอบคลุมเวลาแอนิเมชันแบบเรียงลำดับจังหวะอย่างสวยงาม
+const DUR = { INIT:400, READY:600, INDEX:1400 };
 
 window.speedMul = 1;
 const ms = id => (DUR[id]||400) / speedMul;
@@ -178,6 +179,7 @@ function resize(){
 resize();
 new ResizeObserver(resize).observe(canvas.parentElement);
 
+// ── Mesh Registry ──
 const meshMap={}, origPos={}, origMat={};
 function reg(role,mesh){
   meshMap[role]=mesh;
@@ -216,33 +218,46 @@ function restoreAll(){
   Object.keys(meshMap).forEach(r=>{
     const m=meshMap[r];
     if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
+    if(m) {
+      m.traverse(child => {
+        if(child.isMesh && child.material) child.material.opacity = 1.0;
+      });
+    }
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมแอนิเมชัน ──
+// ── 🎬 ฟังก์ชันจัดลำดับคิวแอนิเมชันให้เสถียร (Sequence Control) ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
 
   switch(id){
     case 'INDEX':
-      // 1. Cerrier เลื่อนหน้าตามแนวรางแกน Z 
-      tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
-      
-      // 2. Roll_1 หมุนตามเข็มนาฬิกา
-      twRot('roller_feed', -Math.PI * 0.5, 0.6/S, 'x');
-
-      // 3. Feed_Cerrier หมุนรอบแกน Z ตามเข็มนาฬิกาอยู่กับที่นิ่งสนิท
-      twRot('feeder_block', -Math.PI * 0.5, 0.6/S, 'z');
-
-      // 4. Roll_2 หมุนตามเข็มนาฬิกาแบบ Gear 2:1
-      if (cycles % 2 === 0) {
-        twRot('roller_blue', -Math.PI * 0.5, 0.6/S, 'x');
-      }
-
-      // 5. Sealing หัวกดความร้อนขยับกดลงและยกขึ้น
+      // 🌟 [คิวที่ 1]: สั่งให้ชุด Sealing พุ่งกดลงมาก่อน (0.3 วินาที) ตอนที่ทุกอย่างยังจอดนิ่งอยู่กับที่
       tw('sealing_head', new THREE.Vector3(0, -0.02, 0), 0.3/S, () => {
-        tw('sealing_head', new THREE.Vector3(0, 0.02, 0), 0.3/S);
+        
+        // เมื่อกดเสร็จปุ๊บ สั่งดีดเด้งยกตัวกลับขึ้นสู่พิกัดเดิมทันที (0.3 วินาที)
+        tw('sealing_head', new THREE.Vector3(0, 0.02, 0), 0.3/S, () => {
+          
+          // 🌟 [คิวที่ 2]: พอยกหัวซีลพ้นระยะปลอดภัยแล้ว (Callback ทำงานเสร็จสิ้น)
+          // ถึงจะสั่งให้ระบบปล่อยฟีดขยับเดินหน้าพร้อมกันยกแผงทันที! ใช้เวลาทำงาน 0.6 วินาที
+          addLog('⚙️ Sealing Finished ➡️ Executing Feeder Line Sequence', 'info');
+
+          // 1. Cerrier เลื่อนหน้าตามแนวรางแกน Z ทีละ 20 เซนติเมตร
+          tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
+          
+          // 2. Roll_1 หมุนตามเข็มนาฬิกา
+          twRot('roller_feed', -Math.PI * 0.5, 0.6/S, 'x');
+
+          // 3. Feed_Cerrier หมุนรอบแกน Z ตามเข็มนาฬิกาอยู่กับที่นิ่งสนิท
+          twRot('feeder_block', -Math.PI * 0.5, 0.6/S, 'z');
+
+          // 4. Roll_2 หมุนตามเข็มนาฬิกาแบบ Gear 2:1 อิงตามรอบลูป
+          if (cycles % 2 === 0) {
+            twRot('roller_blue', -Math.PI * 0.5, 0.6/S, 'x');
+          }
+
+        });
       });
       break;
 
@@ -268,11 +283,21 @@ function animate(){
     if(p>=1){ if(t.onDone) t.onDone(); tweens.splice(i,1); }
   }
 
-  // ระบบลูปรีเซ็ตตำแหน่ง Cerrier กลับจุดสตาร์ทเมื่อขยับไปไกล (เพื่อไม่ให้หลุดขอบจอคอม)
+  // ระบบลูปรีเซ็ตตำแหน่ง Cerrier กลับจุดสตาร์ทเมื่อขยับไปไกล (Fade Out ค่อยๆ จางเพื่อความเนียน)
   const tapeMesh = meshMap['carrier_tape'];
   if (tapeMesh && origPos['carrier_tape']) {
     let distanceMoved = tapeMesh.position.z - origPos['carrier_tape'].z;
-    if (distanceMoved > 0.59) {
+    if (distanceMoved > 0.4) {
+      tapeMesh.traverse(child => {
+        if (child.isMesh && child.material) {
+          child.material.opacity = Math.max(0, 1 - (distanceMoved - 0.4) * 4); 
+        }
+      });
+    } else {
+      tapeMesh.traverse(child => { if (child.isMesh && child.material) child.material.opacity = 1.0; });
+    }
+
+    if (distanceMoved > 0.65) {
       tapeMesh.position.copy(origPos['carrier_tape']);
       const tIdx = tweens.findIndex(t => t.role === 'carrier_tape');
       if (tIdx > -1) {
@@ -288,7 +313,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb ──
+// ── โหลดไฟล์โมเดล Run.glb และจัดพิกัดเครื่องจักร ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene; scene.add(model);
   model.traverse(obj => { if(obj.isMesh) { obj.castShadow = obj.receiveShadow = true; } });
@@ -301,7 +326,16 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   
   let feederGroup = null;
   model.traverse(obj => {
-    if (obj.name === PART_NAMES.carrier_tape) reg('carrier_tape', obj);
+    if (obj.name === PART_NAMES.carrier_tape) {
+      obj.traverse(child => {
+        if (child.isMesh && child.material) {
+          child.material = child.material.clone(); 
+          child.material.transparent = true;
+          child.material.opacity = 1.0;
+        }
+      });
+      reg('carrier_tape', obj);
+    }
     else if (obj.name === PART_NAMES.sealing_head) reg('sealing_head', obj);
     else if (obj.name === PART_NAMES.roller_feed) {
       obj.geometry.computeBoundingBox();
@@ -333,7 +367,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('feeder_block', innerMesh); 
     } else { reg('feeder_block', feederGroup); }
   }
-  addLog(`System Ready — Endless Feeding Mode Active`,'info');
+  addLog(`System Upgraded — Sequential Timing Logic Active`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
 // ── UI & Engine Logic ──
