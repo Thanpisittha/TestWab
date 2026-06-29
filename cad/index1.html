@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Feed_Cerrier Group Fix)</title>
+  <title>BK05 — Digital Twin (Feeder Engine Stable Fix)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -218,11 +218,6 @@ function reg(role,mesh){
   meshMap[role]=mesh;
   origPos[role]=mesh.position.clone();
   mesh._origRot=mesh.rotation.clone(); 
-  
-  // ป้องกันการระเบิดกรณีระบุวัตถุกลุ่มที่ไม่มี Material ติดมาตรงๆ ที่ตัวแม่
-  if(mesh.material) {
-    origMat[role]=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
-  }
 }
 
 // ── Tween & Animation System ──
@@ -270,11 +265,11 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
+// ── 🛠️ ปรับปรุงระบบคุมสีไฮไลท์ใหม่แบบปลอดภัยสูง ไม่ขัดขวางการทำงานอนิเมชัน ──
 function hl(role,mat){
   const m=meshMap[role]; if(!m) return;
-  // บังคับเปลี่ยนสีแบบส่องทะลุเข้ากลุ่มก้อนลูกข่ายทั้งหมด (Deep Hierarchy Traverse)
   m.traverse(child => {
-    if(child.isMesh && origMat[role]) child.material = mat;
+    if(child.isMesh && child.name && origMat[child.name]) child.material = mat;
   });
 }
 
@@ -301,13 +296,13 @@ function playAnim(id){
       hl('carrier_tape', hlMat); 
       hl('feeder_block', hlMat); 
       
-      // 1. Cerrier ขยับเลื่อนพุ่งหน้าสะสมทีละ 20 ซม. (แกน Z)
+      // 1. Cerrier เลื่อนหน้าไปทีละ 20 ซม. (แกน Z ท้องถิ่น)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.5/S);  
       
-      // 2. Roll_1 หมุนรอบตัวเองอยู่กับที่เป๊ะๆ ตามระนาบล้อ แกน X
+      // 2. Roll_1 หมุนรอบแกนกลางของตัวเองอยู่กับที่เป๊ะๆ ตามระนาบล้อ แกน X
       twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'x');
       
-      // 3. Feed_Cerrier ขยับเลื่อนไปข้างหน้า 20 ซม. ขนานตามแนวรางแนวเดียวกันกับ Cerrier
+      // 3. Feed_Cerrier ขยับเลื่อนไปข้างหน้า 20 ซม. (แกน Z) ขนานตามแนวรางแนวเดียวกันกับสายพานสไลด์
       tw('feeder_block', new THREE.Vector3(0, 0, 0.2), 0.5/S);
       break;
 
@@ -347,7 +342,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และแก้ไขปัญหาลอจิกการคัดกรอง Group Object ──
+// ── โหลดไฟล์โมเดล Run.glb และแก้ไขปัญหาการดึงโครงสร้างวัสดุลูกข่าย ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -356,7 +351,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
     if(obj.isMesh) {
       obj.castShadow = true;
       obj.receiveShadow = true;
-      // สำรองข้อมูลวัสดุแยกตามรายชื่อชิ้นย่อยเพื่อป้องกันบั๊กไฟกะพริบเวลารีเซ็ตสี
+      // บันทึกสำรองวัสดุแยกตามรายชื่อชิ้นย่อยรายตัวทั้งหมดลงสารบบเพื่อความเสถียร
       if(obj.name && obj.material) {
         origMat[obj.name] = obj.material.clone();
       }
@@ -372,7 +367,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.update();
   
   model.traverse(obj=>{
-    // 🌟 จุดแก้ไขสำคัญ: ปลดล็อกคำสั่ง !obj.isMesh ออก เพื่ออนุญาตให้ดึงวัตถุประเภทกลุ่ม (Group) เช่น Feed_Cerrier เข้ามาควบคุมได้
+    // ดึงวัตถุมาประมวลผลได้ทั้งประเภทกลุ่ม Group และชิ้นเดี่ยว Mesh
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
       if(role === 'roller_feed' && obj.isMesh) {
