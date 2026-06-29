@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Demo — Digital Twin (Flawless Gear Phase Sync)</title>
+  <title>BK05 — Digital Twin (Full Factory Flowchart Logic)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -16,7 +16,7 @@
       --text:#e8eaf0;--muted:#6b7080;--teal:#00c9a7;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
     }
     body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
-      display:grid;grid-template-columns:1fr 320px;grid-template-rows:48px 1fr;height:100vh;overflow:hidden}
+      display:grid;grid-template-columns:1fr 340px;grid-template-rows:48px 1fr;height:100vh;overflow:hidden}
     header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:0 16px;
       background:var(--surface);border-bottom:1px solid var(--border)}
     .logo{font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--teal)}
@@ -27,9 +27,9 @@
     #canvas-wrap{position:relative;background:#06080a}
     canvas{display:block;width:100%;height:100%}
     .overlay{position:absolute;top:12px;left:12px;background:rgba(10,12,15,.88);
-      border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:160px}
+      border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:200px}
     .ov-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
-    .ov-state{font-size:22px;font-weight:700;color:var(--teal);line-height:1.1;transition:color .3s}
+    .ov-state{font-size:20px;font-weight:700;color:var(--teal);line-height:1.1;transition:color .3s}
     .ov-desc{font-size:11px;color:var(--muted);margin-top:3px}
     .anim-tag{position:absolute;bottom:12px;left:12px;background:rgba(251,191,36,.15);
       border:1px solid var(--amber);border-radius:7px;padding:5px 12px;font-size:11px;color:var(--amber);display:none}
@@ -54,16 +54,16 @@
     .cnt-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:1px}
     .sec-title{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:10px 14px 4px}
     .states{flex:1;overflow-y:auto;padding:0 8px 8px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
-    .si{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;margin-bottom:2px;transition:background .2s}
+    .si{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;margin-bottom:2px;transition:background .2s}
     .si.active{background:rgba(0,201,167,.1)}
     .si.visited{background:rgba(255,255,255,.02)}
     .si-dot{width:7px;height:7px;border-radius:50%;background:#2a2d38;flex-shrink:0;transition:background .3s}
     .si.active .si-dot{background:var(--teal);box-shadow:0 0 5px var(--teal)}
     .si.visited .si-dot{background:var(--purple)}
-    .si-name{font-size:11px;font-weight:600;color:var(--muted);min-width:95px;transition:color .2s}
+    .si-name{font-size:10px;font-weight:600;color:var(--muted);min-width:105px;transition:color .2s}
     .si.active .si-name{color:var(--teal)}
     .si.visited .si-name{color:var(--text)}
-    .si-action{font-size:10px;color:var(--muted)}
+    .si-action{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .log-wrap{border-top:1px solid var(--border);height:145px;display:flex;flex-direction:column;flex-shrink:0}
     .log-hdr{padding:6px 14px;display:flex;justify-content:space-between;align-items:center}
     .log-clr{font-size:10px;color:var(--muted);cursor:pointer}.log-clr:hover{color:var(--text)}
@@ -75,9 +75,9 @@
 </head>
 <body>
 <header>
-  <span class="logo">Demo</span>
+  <span class="logo">BK05</span>
   <span style="color:var(--border)">|</span>
-  <span class="htitle">SMD Reel Packing — Simplified Digital Twin</span>
+  <span class="htitle">SMD Reel Packing — Full Flowchart Digital Twin</span>
   <div class="hdot" id="hdot"></div>
   <span id="hstatus">Idle</span>
 </header>
@@ -113,7 +113,7 @@
   <div class="counters">
     <div class="cnt"><div class="cnt-val" id="cCycles">0</div><div class="cnt-lbl">Feeds (Cycles)</div></div>
   </div>
-  <div class="sec-title">FSM States (Strict Sequential Loops)</div>
+  <div class="sec-title">FSM Flow (According to Flowchart)</div>
   <div class="states" id="statesList"></div>
   <div class="log-wrap">
     <div class="log-hdr">
@@ -137,28 +137,52 @@ const PART_NAMES = {
   sealing_head: 'Sealing', 
 };
 
+// ลำดับสเตตทั้งหมดถอดมาจากภาพโฟลว์ชาร์ตโรงงานของนิวครับ
 const STATES = [
-  {id:'INIT',       action:'Initialize System'},
-  {id:'READY',      action:'Waiting for Start'},
-  {id:'SEAL_DOWN',  action:'[สเตป 1] หัว Sealing สับกดลงลึก 5 ซม. (ทำงาน 1 วินาที)'}, 
-  {id:'SEAL_UP',    action:'[สเตป 2] หัว Sealing ยกตัวคืนตำแหน่งเดิม (ทำงาน 1 วินาที)'}, 
-  {id:'FEED_STEP',  action:'[สเตป 3] Roll_1 หมุนป้อนทุกรอบ | Roll_2 หมุนเฉพาะรอบคู่ (ทำงาน 1 วินาที)'}, 
+  {id:'INIT',          action:'โหลด Carrier & Cover Tape'},
+  {id:'READY',         action:'Power ON / ตั้งค่าผ่าน'},
+  {id:'SET_PARAMS',    action:'กำหนด Speed / Temp / Pressure / Count'},
+  {id:'INDEX',         action:'Motor 1 (Roll_1) เลื่อนฟีดสายพานเทป'},
+  {id:'CHECK_CARRIER', action:'เซนเซอร์ตรวจสอบความถูกต้องของ Carrier'},
+  {id:'LOAD_PART',     action:'หย่อนชิ้นส่วนอิเล็กทรอนิกส์ลงหลุม Carrier'},
+  {id:'VISION',        action:'กล้อง Camera 1 เช็คตำแหน่งชิ้นงาน'},
+  {id:'COUNT_CHECK',   action:'ระบบตรวจเช็คจำนวนชิ้นงานสะสมคิวป้อน'},
+  {id:'FEED_COVER',    action:'ฟีดเทปใส Cover Tape ปิดหน้าชิ้นงาน'},
+  {id:'CHECK_TEMP',    action:'ตรวจสอบระดับอุณหภูมิความร้อนหัวซีล'},
+  {id:'SEAL_DOWN',     action:'หัวซีลสับกดลงแช่ความร้อนลึก 5 ซม.'},
+  {id:'SEAL_UP',       action:'หัวซีลยกตัวขึ้นคืนตำแหน่งแท่นสแตนบาย'},
+  {id:'VISION_QC',     action:'กล้อง Camera 2 ตรวจเช็คคุณภาพรอยซีลเทป'},
+  {id:'ROLL',          action:'Motor 2 (Roll_2) ม้วนเทปเก็บ (หมุนเฉพาะรอบคู่)'}
 ];
 
+// ทรานซิชันวิ่งเรียงสเต็ปแบบซีเควนเชียลลูปสมบูรณ์
 const TR = {
-  INIT:        {auto:'READY'},
-  READY:       {auto:'SEAL_DOWN'},
-  SEAL_DOWN:   {auto:'SEAL_UP'}, 
-  SEAL_UP:     {auto:'FEED_STEP'}, 
-  FEED_STEP:   {auto:'SEAL_DOWN'}, 
+  INIT:          {auto:'READY'},
+  READY:         {auto:'SET_PARAMS'},
+  SET_PARAMS:    {auto:'INDEX'},
+  INDEX:         {auto:'CHECK_CARRIER'},
+  CHECK_CARRIER: {auto:'LOAD_PART'},
+  LOAD_PART:     {auto:'VISION'},
+  VISION:        {auto:'COUNT_CHECK'},
+  COUNT_CHECK:   {auto:'FEED_COVER'},
+  FEED_COVER:    {auto:'CHECK_TEMP'},
+  CHECK_TEMP:    {auto:'SEAL_DOWN'},
+  SEAL_DOWN:     {auto:'SEAL_UP'},
+  SEAL_UP:       {auto:'VISION_QC'},
+  VISION_QC:     {auto:'ROLL'},
+  ROLL:          {auto:'INDEX'} // ยิงวนกลับไปฟีดรอบใหม่เรื่อยๆ
 };
 
-const DUR = { INIT:400, READY:600, SEAL_DOWN:1000, SEAL_UP:1000, FEED_STEP:1000 };
+const DUR = { 
+  INIT:500, READY:500, SET_PARAMS:500,
+  INDEX:1000, CHECK_CARRIER:400, LOAD_PART:600, VISION:400, COUNT_CHECK:400,
+  FEED_COVER:600, CHECK_TEMP:400, SEAL_DOWN:1000, SEAL_UP:1000, VISION_QC:400, ROLL:1000 
+};
 
 window.speedMul = 1;
-const ms = id => (DUR[id]||400) / speedMul;
+const ms = id => (DUR[id]||500) / speedMul;
 
-// ── Three.js Setup ──
+// ── Three.js Engine Setup ──
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -182,7 +206,7 @@ function resize(){
 resize();
 new ResizeObserver(resize).observe(canvas.parentElement);
 
-// ── Mesh Registry ──
+// ── Registry ──
 const meshMap={}, origPos={}, origMat={};
 function reg(role,mesh){
   meshMap[role]=mesh;
@@ -193,84 +217,77 @@ function reg(role,mesh){
   }
 }
 
-// ── Tween & Animation System ──
+// ── Tween System ──
 const tweens=[];
-
 function twCustomKey(roleKey,targetMesh,fromPos,toPos,durSec,onDone=null){
   const i=tweens.findIndex(t=>t.role===roleKey); if(i>-1) tweens.splice(i,1);
-  tweens.push({
-    role: roleKey, mesh: targetMesh, from: fromPos.clone(), to: toPos.clone(), dur: durSec, elapsed: 0, onDone
-  });
+  tweens.push({role:roleKey,mesh:targetMesh,from:fromPos.clone(),to:toPos.clone(),dur:durSec,elapsed:0,onDone});
   document.getElementById('animTag').style.display='block';
 }
 
-function twRot(role,deltaRot,durSec,axis='x',onDone=null){
+function twRot(role,deltaRot,durSec,axis='x'){
   const mesh=meshMap[role]; if(!mesh) return;
   const key=role+'_r';
   const i=tweens.findIndex(t=>t.role===key); if(i>-1) tweens.splice(i,1);
-  tweens.push({role:key,mesh,fromRot:mesh.rotation[axis],toRot:mesh.rotation[axis]+deltaRot,isRot:true,rotAxis:axis,dur:durSec,elapsed:0,onDone});
+  tweens.push({role:key,mesh,fromRot:mesh.rotation[axis],toRot:mesh.rotation[axis]+deltaRot,isRot:true,rotAxis:axis,dur:durSec,elapsed:0});
   document.getElementById('animTag').style.display='block';
 }
 
 function ret(role,durSec=0.18){
   const mesh=meshMap[role]; if(!mesh||!origPos[role]) return;
   const i=tweens.findIndex(t=>t.role===role); if(i>-1) tweens.splice(i,1);
-  tweens.push({role,mesh,from:mesh.position.clone(),to:origPos[role].clone(),dur:durSec,elapsed:0,onDone:null});
+  tweens.push({role,mesh,from:mesh.position.clone(),to:origPos[role].clone(),dur:durSec,elapsed:0});
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-function restoreAll(){
-  Object.keys(meshMap).forEach(r=>{
-    const m=meshMap[r];
-    if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
-  });
-}
-
-// ── 🎬 ฟังก์ชันควบคุมแอนิเมชัน ──
+// ── 🎬 ฟังก์ชันแอนิเมชันถอดพฤติกรรมจากโรงงาน ──
 function playAnim(id){
   const S = speedMul;
   const sealMesh = meshMap['sealing_head'];
   const tapeMesh = meshMap['carrier_tape'];
 
   switch(id){
+    case 'INDEX':
+      // 🔴 ล้อแดงขวา (Roll_1) และม้วนขาว (Feed_Cerrier) สั่งหมุนทำงานในทุกๆ ลูปของการขึ้นรอบใหม่
+      twRot('roller_feed', -Math.PI * 2.5, 1.0/S, 'x'); 
+      twRot('feeder_block', -Math.PI * 2.5, 1.0/S, 'z'); 
+
+      // สายพาน Carrier สไลด์เลื่อนหน้าส่งหลุมป้อนงาน
+      if(tapeMesh && origPos['carrier_tape']) {
+        tapeMesh.position.copy(origPos['carrier_tape']);
+        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0, 0, 0.2));
+        twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 1.0/S, () => {
+          tapeMesh.position.copy(origPos['carrier_tape']);
+        });
+      }
+      break;
+
     case 'SEAL_DOWN':
+      // หัวซีลสับกดลงแนวแกน Y แช่ความร้อนหนีบเทปลึก 5 ซม. (-0.05) นาน 1 วินาที
       if(sealMesh && origPos['sealing_head']){
-        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.5, 0));
+        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.05, 0));
         twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 1.0/S);
       }
       break;
 
     case 'SEAL_UP':
+      // ดึงยกหัวซีลคืนตำแหน่งสแตนบายด้านบน นาน 1 วินาที
       if(sealMesh && origPos['sealing_head']){
         twCustomKey('sealing_up', sealMesh, sealMesh.position, origPos['sealing_head'], 1.0/S);
       }
       break;
 
-    case 'FEED_STEP':
-      if(tapeMesh && origPos['carrier_tape']) {
-        tapeMesh.position.copy(origPos['carrier_tape']);
-        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0, 0, 2));
-        
-        twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 1.0/S, () => {
-          tapeMesh.position.copy(origPos['carrier_tape']);
-        });
-      }
-      
-      // 🔴 ล้อแดงขวา (Roll_1) และม้วนขาวกลาง (Feed_Cerrier) หมุนทุกรอบไม่สนเลขคู่คี่
-      twRot('roller_feed', -Math.PI * 2.5, 1.0/S, 'x'); 
-      twRot('feeder_block', -Math.PI * 2.5, 1.0/S, 'z'); 
-
-      // 🌟 🛠️ แก้ลอจิกตรงนี้: เช็คให้ Roll_2 หมุนเฉพาะรอบคู่สัมบูรณ์ (2, 4, 6...) ชัวร์ 100%
+    case 'ROLL':
+      // 🔵 ม้วนน้ำเงินซ้าย (Roll_2) จะยอมทำหน้าที่หมุนเก็บเทปเฉพาะรอบคู่ (Even Cycles) เท่านั้น
       if (cycles % 2 === 0) {
-        addLog('⚙️ Gear Reduce: Roll_2 (Blue) Active on Even Cycle: ' + cycles, 'warn');
-        twRot('roller_blue', -Math.PI * 2.5, 1.0/S, 'x'); // หมุนพร้อมล้อแดงในรอบคู่
+        addLog('⚙️ Gear Active: Roll_2 (Blue) Rotating on Even Cycle: ' + cycles, 'warn');
+        twRot('roller_blue', -Math.PI * 2.5, 1.0/S, 'x'); 
       } else {
-        addLog('⚙️ Gear Standby: Roll_2 (Blue) Stationary on Odd Cycle: ' + cycles, 'info'); // รอบคี่ (รอบที่ 1) ล้อน้ำเงินจะจอดรอเงียบๆ
+        addLog('⚙️ Gear Standby: Roll_2 (Blue) Idle on Odd Cycle: ' + cycles, 'info');
       }
       break;
 
     case 'INIT':
-      restoreAll();
       ret('carrier_tape', 0.25/S); 
       ret('sealing_head', 0.25/S);
       break;
@@ -297,10 +314,10 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Machine.glb ──
+// ── โหลดโมเดล 3D Machine.glb ──
 new GLTFLoader().load('./export/Machine.glb', gltf=>{
   const model = gltf.scene; scene.add(model);
-  model.traverse(obj => { if(obj.isMesh) { obj.castShadow = obj.receiveShadow = true; } });
+  model.traverse(obj => { if(obj.isMesh) obj.castShadow = obj.receiveShadow = true; });
 
   const box=new THREE.Box3().setFromObject(model);
   const center=box.getCenter(new THREE.Vector3());
@@ -342,14 +359,14 @@ new GLTFLoader().load('./export/Machine.glb', gltf=>{
       reg('feeder_block', innerMesh); 
     } else { reg('feeder_block', feederGroup); }
   }
-  addLog(`System Synchronized — Fixed Looping Position Online`,'info');
+  addLog(`System Synchronized — Full Flow Machine Standard Online`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
-// ── UI & Engine Logic ──
+// ── UI List Render ──
 const sl=document.getElementById('statesList');
 STATES.forEach(s=>{
   const el=document.createElement('div'); el.className='si'; el.id='si_'+s.id;
-  el.innerHTML=`<div class="si-dot"></div><span class="si-name">${s.id}</span><span class="si-action">${s.action}</span>`;
+  el.innerHTML=`<div class="si-dot"></div><span class="si-name">${s.id}</span><span class="si-action" title="${s.action}">${s.action}</span>`;
   sl.appendChild(el);
 });
 
@@ -386,11 +403,10 @@ function setState(id){
   const dot=document.getElementById('hdot'), hs=document.getElementById('hstatus');
   dot.className = running ? 'hdot run' : 'hdot'; hs.textContent = running ? 'Running' : 'Idle';
   
-  // 🌟 บังคับสั่งให้คิวบวกบวกค่ารอบย้ายขึ้นมาเช็คสถานะก่อนสั่งเล่นแอนิเมชัน playAnim
-  if(id==='FEED_STEP') { cycles++; document.getElementById('cCycles').textContent=cycles; }
+  // นำลอจิกเช็ครอบคู่/คี่ มาคำนวณที่จุดขึ้นรอบฟีดสายพาน (INDEX) เพื่อความเป็นระบบ
+  if(id==='INDEX') { cycles++; document.getElementById('cCycles').textContent=cycles; }
   
   playAnim(id);
-  
   addLog('→ '+id, 'info');
   
   if(!running) return;
@@ -399,7 +415,7 @@ function setState(id){
     if (isManualMode) {
       stepAllowed = true;
       document.getElementById('btnStep').disabled = false;
-      addLog(`[Ready] สเตท ${id} ทำงานครบ 1 วินาทีแล้ว กดปุ่ม Step เพื่อขยับต่อ...`, 'warn');
+      addLog(`[Ready] ${id} เสร็จสิ้น — กดปุ่ม Step เพื่อดำเนินสเตปถัดไปตาม Flowchart`, 'warn');
     } else {
       triggerNextTransition();
     }
@@ -423,7 +439,7 @@ window.fsmStep = function() {
 window.fsmStart = function(){ if(running) return; running=true; setState('INIT'); document.getElementById('btnStart').disabled=true; document.getElementById('btnReset').disabled=false; };
 window.fsmReset = function(){
   clearTimeout(timer); running=false; stepAllowed=false; cycles=0; document.getElementById('cCycles').textContent=0;
-  restoreAll(); tweens.length=0;
+  tweens.length=0;
   Object.keys(meshMap).forEach(role=>{
     const m=meshMap[role]; if(m && origPos[role]){ m.position.copy(origPos[role]); if(m._origRot) m.rotation.copy(m._origRot); }
   });
