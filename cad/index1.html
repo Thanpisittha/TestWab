@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Perfect Local Roll Rotation)</title>
+  <title>BK05 — Digital Twin (Perfect Pivot & Position Latch)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -136,10 +136,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// ── 🛠️ จุดแก้ไขที่ 1: แมปชื่อให้ตรงตามโครงสร้างไฟล์จริงใน Run.glb ของคุณ ──
+// จับคู่แมปตัวแปรตรงตามวัตถุภายในไฟล์ Run.glb ของคุณร้อยเปอร์เซ็นต์
 const PART_NAMES = {
   carrier_tape: 'Cerrier', 
-  roller_feed:  'Roll_1', // เปลี่ยนชื่อเป็น Roll_1 เพื่อจับคู่ชิ้นงานสีแดงฝั่งขวาเจอ
+  roller_feed:  'Roll_1', 
 };
 
 const STATES = [
@@ -289,7 +289,7 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมการทำงาน ──
+// ── 🎬 ฟังก์ชันควบคุมการขยับกลไก ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -298,10 +298,10 @@ function playAnim(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
       
-      // 1. Cerrier ขยับเลื่อนพุ่งหน้าทีละ 20 ซม. (แกน Z ท้องถิ่น)
+      // Cerrier สไลด์พุ่งหน้าสะสมทีละ 20 ซม. (แกน Z)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.5/S);  
       
-      // 2. จุดแก้ไขที่ 3: สั่งม้วนฟีดหมุนบนแกน X ย่อย เพื่อให้มันกลิ้งหมุนกลมอยู่กับที่สอดคล้องกับแนวราง
+      // Roll_1 หมุนรอบกึ่งกลางตัวเองอย่างสมบูรณ์แบบบนแกน X โดยที่พิกัดจะจอดล็อกติดแท่นเหล็กเดิมเป๊ะๆ
       twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'x');
       break;
 
@@ -335,7 +335,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และระบบประมวลผลย้ายแกน Pivot อัตโนมัติหลังบ้าน ──
+// ── โหลดไฟล์โมเดล Run.glb และระบบคำนวณสลับแกน Matrix ชดเชยความเพี้ยน ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -359,17 +359,20 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
     if(!obj.isMesh) return;
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
-      // 🛠️ จุดแก้ไขที่ 2: ระบบตรวจจับและชดเชยจุด Pivot ของก้อน Roll_1 ที่เพี้ยนมาจาก Blender
+      // 🛠️ 🛠️ จุดแก้ไขเคล็ดลับระดับ Matrix: ชดเชยจุดศูนย์กลางจานสีแดง และล็อกพิกัดคืนแท่นเครื่องหลักดั้งเดิม
       if(role === 'roller_feed') {
         obj.geometry.computeBoundingBox();
         const localCenter = new THREE.Vector3();
         obj.geometry.boundingBox.getCenter(localCenter);
         
-        // รวบพิกัดเนื้อโมเดลภายในก้อนจานแดงทั้งหมดมาไว้ที่จุด (0,0,0) ท้องถิ่นเพื่อสร้างแกนหมุนรอบตัวเอง
+        // รวบโครงสร้างข้างในวัตถุมาที่ศูนย์กลาง เพื่อสร้างแกนหมุนกลมรอบตัวเองไม่ให้ส่ายควงกว้าง
         obj.geometry.center();
         
-        // ย้ายพิกัดตําแหน่งหลัก (World Position) คืนกลับไปประกอบเข้าล็อกเดิมบนตัวโครงสร้าง Farm อัตโนมัติ
-        obj.position.add(localCenter);
+        // แปลงพิกัดระยะเยื้องศูนย์จาก Local ให้เข้าพิกัด World Matrix ร่วมกับทิศทางความเอียงจาก Blender 
+        // ชิ้นงานสีแดงจะวิ่งกลับไปล็อกเข้าก้านประกอบพิกัดเดิมได้อย่างแม่นยำ ไร้รอยต่อครับ
+        obj.updateMatrixWorld(true);
+        localCenter.applyMatrix4(obj.matrixWorld);
+        obj.position.copy(localCenter);
       }
       reg(role, obj); 
     }
