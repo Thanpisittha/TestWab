@@ -228,7 +228,7 @@ function playAnim(id){
   switch(id){
     case 'INDEX':
       // 1. Cerrier เลื่อนหน้าตามแนวรางแกน Z 
-      tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
+      tw('carrier_tape', new THREE.Vector3(0, 0, 2), 0.6/S);  
       
       // 2. Roll_1 หมุนตามเข็มนาฬิกา
       twRot('roller_feed', -Math.PI * 0.5, 0.6/S, 'x');
