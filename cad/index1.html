@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Flawless Sequential Logic)</title>
+  <title>BK05 — Digital Twin (Flawless Sequence No Flicker)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -140,7 +140,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'[Step Sequence] 1. กดลงปั๊มเทป ➡️ 2. ยกขึ้นจอดนิ่ง ➡️ 3. เลื่อนป้อน 1 สเตป'}, 
+  {id:'INDEX',      action:'Sealing กดลง ➡️ ยกขึ้น ➡️ Cerrier เลื่อน 1 สเตปสมบูรณ์ (ไร้อาการกระพริบ)'}, 
 ];
 
 const TR = {
@@ -149,8 +149,7 @@ const TR = {
   INDEX:       {auto:'INDEX'}, 
 };
 
-// ขยายเวลารวมของสเตทเพิ่มเป็น 1600ms เพื่อปล่อยให้ลำดับขั้นตอนขยับได้อย่างสมบูรณ์แบบไม่เร่งรีบเกินไป
-const DUR = { INIT:400, READY:600, INDEX:1600 };
+const DUR = { INIT:400, READY:600, INDEX:1500 };
 
 window.speedMul = 1;
 const ms = id => (DUR[id]||400) / speedMul;
@@ -193,7 +192,6 @@ function reg(role,mesh){
 // ── Tween & Animation System ──
 const tweens=[];
 
-// ฟังก์ชันขยับพิกัดทั่วไปแบบกำหนดชื่อคิวอิสระ (Custom Role Key) เพื่อป้องกันบั๊กตัดคิวแอนิเมชันซ้อนกัน
 function twCustomKey(roleKey,targetMesh,fromPos,toPos,durSec,onDone=null){
   const i=tweens.findIndex(t=>t.role===roleKey); if(i>-1) tweens.splice(i,1);
   tweens.push({
@@ -227,15 +225,10 @@ function restoreAll(){
   Object.keys(meshMap).forEach(r=>{
     const m=meshMap[r];
     if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
-    if(m) {
-      m.traverse(child => {
-        if(child.isMesh && child.material) child.material.opacity = 1.0;
-      });
-    }
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมแอนิเมชันแบบแยกคิวขั้นตอนสัมบูรณ์ (Flawless Sequence Logic) ──
+// ── 🎬 ฟังก์ชันควบคุมคิวแอนิเมชันแบบเรียงจังหวะแม่นยำ (Perfect Sequence Controls) ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -245,28 +238,35 @@ function playAnim(id){
       const sealMesh = meshMap['sealing_head'];
       if(sealMesh && origPos['sealing_head']){
         
-        // ⚡ [ขั้นตอนที่ 1]: บังคับให้หัวซีลพุ่งกดหัวดิ่งลงมาด้านล่างโดนรางเทปเป็นคิวแรก ใช้ชื่อกุญแจ 'sealing_down'
+        // 1. หัวซีลสับลงแกน Y หาเทป Cerrier เป็นคิวแรก (ใช้เวลา 0.4 วินาที)
         const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.02, 0));
         twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 0.4/S, () => {
           
-          // ⚡ [ขั้นตอนที่ 2]: พอกดโดนเทปจนครบเวลา ➡️ บังคับให้ดึงตัวยกกลับขึ้นไปอยู่ด้านบนที่พิกัดดั้งเดิม ใช้ชื่อกุญแจ 'sealing_up'
-          // **ในช่วงจังหวะนี้ รางกับล้อทุกล้อยังคงล็อกนิ่งสแตนบายอยู่กับที่**
+          // 2. เมื่อปั๊มโดนชิ้นงานเสร็จ ➡️ สั่งยกตัวดึงกลับไปที่พิกัดตั้งต้นด้านบนทันที (ใช้เวลา 0.4 วินาที)
           twCustomKey('sealing_up', sealMesh, sealMesh.position, origPos['sealing_head'], 0.4/S, () => {
             
-            // ⚡ [ขั้นตอนที่ 3]: พอยกหัวซีลเสร็จเรียบร้อยจอดนิ่งสนิทด้านบนแล้ว ➡️ ค่อยสั่งขยับรางและล้อป้อนสเตปถัดไปพร้อมกันทันที!
-            addLog('⚡ Sealing Up Finished ➡️ Moving Cerrier & Rotating Wheels', 'warn');
+            // 3. พอยกหัวซีลเสร็จเรียบร้อยและจอดนิ่งสนิทแล้ว ➡️ ค่อยสั่งขยับ Cerrier และล้อทุกล้อป้อนสเตปถัดไปพร้อมกัน
+            addLog('⚡ Sealing Up Finished ➡️ Advancing Feeder Line 1 Step', 'warn');
 
-            // Cerrier เริ่มเลื่อนหน้าพุ่งไปตามแนวรางแกน Z ทีละ 1 สเตป (ระยะทาง 20 ซม.)
             const tapeMesh = meshMap['carrier_tape'];
-            if(tapeMesh) {
+            if(tapeMesh && origPos['carrier_tape']) {
+              
+              // ตรวจเช็ค: ถ้ารอบปัจจุบัน ตัวรางกำลังจะเลื่อนหน้าเลยระยะลูปกำหนด (เกิน 0.4 เมตร) 
+              // เราจะสั่ง Reset ล้างค่าพิกัดให้มันกลับไปเริ่มสตาร์ทใหม่ที่จุดแรกสุดทันทีแบบเนียน ๆ ก่อนเลื่อนหน้ารอบนี้!
+              let currentDistance = tapeMesh.position.z - origPos['carrier_tape'].z;
+              if (currentDistance > 0.4) {
+                tapeMesh.position.copy(origPos['carrier_tape']);
+              }
+
+              // สั่งให้ Cerrier สไลด์เลื่อนหน้าไป 1 สเตป (ระยะทาง 20 ซม.)
               twCustomKey('carrier_move', tapeMesh, tapeMesh.position, tapeMesh.position.clone().add(new THREE.Vector3(0, 0, 0.2)), 0.6/S);
             }
             
-            // ล้อทุกล้อเริ่มหมุนกวาดเทปตามเข็มนาฬิกาควบคู่กันไป
+            // ล้อหมุนป้อนตามเข็มนาฬิกาควบคู่พร้อมรางเทป
             twRot('roller_feed', -Math.PI * 0.5, 0.6/S, 'x'); // Roll_1
             twRot('feeder_block', -Math.PI * 0.5, 0.6/S, 'z'); // Feed_Cerrier
             if (cycles % 2 === 0) {
-              twRot('roller_blue', -Math.PI * 0.5, 0.6/S, 'x'); // Roll_2 (Gear 2:1)
+              twRot('roller_blue', -Math.PI * 0.5, 0.6/S, 'x'); // Roll_2 (Gear Ratio 2:1)
             }
 
           });
@@ -296,32 +296,6 @@ function animate(){
     if(p>=1){ if(t.onDone) t.onDone(); tweens.splice(i,1); }
   }
 
-  // ระบบคำนวณระยะวนลูปรางสายพาน Cerrier อัตโนมัติ (Fade Out ค่อยๆจางเมื่อเลยระยะ)
-  const tapeMesh = meshMap['carrier_tape'];
-  if (tapeMesh && origPos['carrier_tape']) {
-    let distanceMoved = tapeMesh.position.z - origPos['carrier_tape'].z;
-    if (distanceMoved > 0.4) {
-      tapeMesh.traverse(child => {
-        if (child.isMesh && child.material) {
-          child.material.opacity = Math.max(0, 1 - (distanceMoved - 0.4) * 4); 
-        }
-      });
-    } else {
-      tapeMesh.traverse(child => { if (child.isMesh && child.material) child.material.opacity = 1.0; });
-    }
-
-    if (distanceMoved > 0.65) {
-      tapeMesh.position.copy(origPos['carrier_tape']);
-      // เคลียร์คิวความเคลื่อนไหวเดิมออกเพื่อป้อนสเตปวนลูปใหม่เริ่มต้นจากพิกัดเดิมได้อย่างลื่นไหล
-      const tIdx = tweens.findIndex(t => t.role === 'carrier_move');
-      if (tIdx > -1) {
-        tweens[tIdx].from.copy(origPos['carrier_tape']);
-        tweens[tIdx].to.copy(origPos['carrier_tape']).add(new THREE.Vector3(0, 0, 0.2));
-        tweens[tIdx].elapsed = 0;
-      }
-    }
-  }
-
   if(tweens.length===0) document.getElementById('animTag').style.display='none';
   renderer.render(scene,camera);
 }
@@ -341,13 +315,6 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   let feederGroup = null;
   model.traverse(obj => {
     if (obj.name === PART_NAMES.carrier_tape) {
-      obj.traverse(child => {
-        if (child.isMesh && child.material) {
-          child.material = child.material.clone(); 
-          child.material.transparent = true;
-          child.material.opacity = 1.0;
-        }
-      });
       reg('carrier_tape', obj);
     }
     else if (obj.name === PART_NAMES.sealing_head) reg('sealing_head', obj);
@@ -381,7 +348,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('feeder_block', innerMesh); 
     } else { reg('feeder_block', feederGroup); }
   }
-  addLog(`System Upgraded — Sequence Automation Stabilized`,'info');
+  addLog(`System Upgraded — Sequence Stabilized Without Flicker`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
 // ── UI & Engine Logic ──
