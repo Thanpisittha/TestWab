@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Perfect Pivot & Position Latch)</title>
+  <title>BK05 — Digital Twin (Feed_Cerrier Sync)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -136,10 +136,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// จับคู่แมปตัวแปรตรงตามวัตถุภายในไฟล์ Run.glb ของคุณร้อยเปอร์เซ็นต์
+// ── 🛠️ เพิ่มชื่อโมเดลป้อนสายพาน Feed_Cerrier เข้าสู่สารบบจับคู่ชิ้นส่วน ──
 const PART_NAMES = {
   carrier_tape: 'Cerrier', 
   roller_feed:  'Roll_1', 
+  feeder_block: 'Feed_Cerrier', // 🌟 ผูกวัตถุป้อนสายพานจากโครงสร้างไฟล์ของนิวเข้าบอร์ดควบคุม
 };
 
 const STATES = [
@@ -289,7 +290,7 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมการขยับกลไก ──
+// ── 🎬 ฟังก์ชันควบคุมลอจิกความเคลื่อนไหว (เพิ่มระบบกระตุกฟีดสายพานคู่ขนาน) ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -297,20 +298,34 @@ function playAnim(id){
   switch(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
+      hl('feeder_block', hlMat); // เปิดไฟไฮไลท์ที่บล็อกตัวฟีดด้วย
       
-      // Cerrier สไลด์พุ่งหน้าสะสมทีละ 20 ซม. (แกน Z)
+      // 1. Cerrier ขยับเลื่อนพุ่งหน้าสะสมทีละ 20 ซม. (แกน Z)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.5/S);  
       
-      // Roll_1 หมุนรอบกึ่งกลางตัวเองอย่างสมบูรณ์แบบบนแกน X โดยที่พิกัดจะจอดล็อกติดแท่นเหล็กเดิมเป๊ะๆ
+      // 2. Roll_1 หมุนรอบตัวเองอยู่กับที่เป๊ะๆ ตามระนาบล้อ แกน X
       twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'x');
+      
+      // 3. 🌟 Feed_Cerrier ขยับเลื่อนไปข้างหน้า 20 ซม. พร้อมๆ กันขนานไปกับ Cerrier
+      tw('feeder_block', new THREE.Vector3(0, 0, 0.2), 0.5/S);
       break;
 
     case 'INIT':
+      // ดึง Cerrier กลับจุดสตาร์ทเริ่มต้น (กรณีรันลูปเครื่องใหม่)
       ret('carrier_tape', 0.25/S); 
+      
+      // 🌟 ดึง Feed_Cerrier สไลด์ถอยหลังกลับไปรอที่จุดเริ่มต้นเดิม เพื่อเตรียมพร้อมกระตุกฟีดในรอบถัดไป
+      ret('feeder_block', 0.20/S);
+      break;
+
+    case 'READY':
+      // 🌟 เสริมลอจิก: ทุกครั้งที่วนลูปกลับมาสแตนบายรอที่ READY ให้ตัวป้อนถอยกลับมารอที่จุดสตาร์ทเสมอ ชิ้นงานสายพานจะได้คาตำแหน่งสะสมไว้ตามสั่งครับ
+      ret('feeder_block', 0.20/S);
       break;
 
     case 'ALARM':
       hl('carrier_tape', alMat);
+      hl('feeder_block', alMat);
       break;
   }
 }
@@ -335,7 +350,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และระบบคำนวณสลับแกน Matrix ชดเชยความเพี้ยน ──
+// ── โหลดไฟล์โมเดล Run.glb และระบบคำนวณชดเชยจุด Pivot ของแท่นเครื่อง ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -359,20 +374,16 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
     if(!obj.isMesh) return;
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
-      // 🛠️ 🛠️ จุดแก้ไขเคล็ดลับระดับ Matrix: ชดเชยจุดศูนย์กลางจานสีแดง และล็อกพิกัดคืนแท่นเครื่องหลักดั้งเดิม
       if(role === 'roller_feed') {
         obj.geometry.computeBoundingBox();
         const localCenter = new THREE.Vector3();
         obj.geometry.boundingBox.getCenter(localCenter);
         
-        // รวบโครงสร้างข้างในวัตถุมาที่ศูนย์กลาง เพื่อสร้างแกนหมุนกลมรอบตัวเองไม่ให้ส่ายควงกว้าง
-        obj.geometry.center();
+        obj.geometry.center(); // รวบแกนหมุน Roll_1 มาไว้ตรงกลางตัวเอง
         
-        // แปลงพิกัดระยะเยื้องศูนย์จาก Local ให้เข้าพิกัด World Matrix ร่วมกับทิศทางความเอียงจาก Blender 
-        // ชิ้นงานสีแดงจะวิ่งกลับไปล็อกเข้าก้านประกอบพิกัดเดิมได้อย่างแม่นยำ ไร้รอยต่อครับ
         obj.updateMatrixWorld(true);
         localCenter.applyMatrix4(obj.matrixWorld);
-        obj.position.copy(localCenter);
+        obj.position.copy(localCenter); // ชดเชยพิกัดกลับเข้าแท่นเครื่องเดิมเป๊ะๆ
       }
       reg(role, obj); 
     }
@@ -526,7 +537,7 @@ window.fsmReset = function(){
   document.getElementById('ovState').textContent='READY';
   document.getElementById('ovState').className='ov-state';
   document.getElementById('ovDesc').textContent='Waiting for Start';
-  current='READY'; addLog('↺ Reset ระบบสถานะและทิศทางวัตถุกลับจุดเริ่มต้นที่ถูกต้องแล้ว','warn');
+  current='READY'; addLog('↺ Reset ระบบสถานะและตำแหน่งชิ้นส่วนเครื่องจักรทั้งหมดกลับจุดเริ่มต้นแล้ว','warn');
 };
 </script>
 </body>
