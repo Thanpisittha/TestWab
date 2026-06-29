@@ -237,7 +237,7 @@ function playAnim(id){
     case 'SEAL_DOWN':
       // 🌟 แก้ไข: สั่งหัวซีลปั๊มกดดิ่งลงแกน Y ลึกขึ้นอีก 5 ซม. (-0.05) และปรับเวลาเล่นแอนิเมชันให้เต็ม 1.0 วินาที
       if(sealMesh && origPos['sealing_head']){
-        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.05, 0));
+        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.5, 0));
         twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 1.0/S);
       }
       break;
