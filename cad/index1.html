@@ -16,15 +16,27 @@
       --text:#e8eaf0;--muted:#6b7080;--teal:#00c9a7;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
     }
     body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
-      display:grid;grid-template-columns:1fr 340px;grid-template-rows:48px 1fr;height:100vh;overflow:hidden}
+      display:grid;grid-template-columns:1fr 320px;grid-template-rows:48px 1fr;height:100vh;overflow:hidden}
     header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:0 16px;
       background:var(--surface);border-bottom:1px solid var(--border)}
     .logo{font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--teal)}
     .htitle{font-size:12px;color:var(--muted)}
-    .hdot{width:8px;height:8px;border-radius:50%;background:#4b5563;margin-left:auto;transition:background .3s}
+    .hdot{width:8px;height:8px;border-radius:50%;background:#4b5563;transition:background .3s}
     .hdot.run{background:var(--teal);box-shadow:0 0 6px var(--teal)}
     .hdot.inspect{background:var(--amber);box-shadow:0 0 6px var(--amber)}
-    #hstatus{font-size:12px;color:var(--muted);margin-left:6px}
+    #hstatus{font-size:12px;color:var(--muted);margin-left:6px;margin-right:16px}
+    
+    /* 🌟 สไตล์ปุ่ม Home ที่เพิ่มเข้ามาใหม่ */
+    .home-btn{
+      display:flex;align-items:center;justify-content:center;
+      font-size:16px;color:var(--muted);text-decoration:none;
+      width:32px;height:32px;border-radius:6px;border:1px solid transparent;
+      margin-left:auto;cursor:pointer;transition:all .2s;
+    }
+    .home-btn:hover{
+      color:var(--teal);background:var(--surface2);border-color:var(--border);
+    }
+
     #canvas-wrap{position:relative;background:#06080a}
     canvas{display:block;width:100%;height:100%}
     .overlay{position:absolute;top:12px;left:12px;background:rgba(10,12,15,.88);
@@ -55,7 +67,7 @@
     .sval{font-size:11px;color:var(--teal);min-width:22px;text-align:right}
     .counters{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
     .cnt{flex:1;padding:10px;text-align:center;border-right:1px solid var(--border)}
-    .cnt:last-child{border-right:none}
+    .cnt-child{border-right:none}
     .cnt-val{font-size:18px;font-weight:700;color:var(--teal)}
     .cnt-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:1px}
     .sec-title{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:10px 14px 4px}
@@ -87,6 +99,9 @@
   <span class="logo">Demo</span>
   <span style="color:var(--border)">|</span>
   <span class="htitle">SMD Reel Packing — Dual Mode Control Dashboard</span>
+  
+  <a href="index.html" class="home-btn" title="กลับหน้าหลัก (Home)">🏠</a>
+  
   <div class="hdot" id="hdot"></div>
   <span id="hstatus">Idle</span>
 </header>
@@ -297,7 +312,7 @@ function playAnim(id){
     case 'ROLL':
       if (cycles % 2 === 0) {
         addLog('⚙️ Gear Active: Roll_2 (Blue) Rotating on Even Cycle: ' + cycles, 'warn');
-        twRot('roller_blue', -Math.PI * 2.5, 1.0/S, 'x'); 
+        twRot('roller_blue', Math.PI * 2.5, 1.0/S, 'x'); 
       } else {
         addLog('⚙️ Gear Standby: Roll_2 (Blue) Idle on Odd Cycle: ' + cycles, 'info');
       }
@@ -393,16 +408,14 @@ function addLog(msg,type='info'){
   b.appendChild(el); b.scrollTop=b.scrollHeight;
 }
 
-// ── ระบบคุมกลไก FSM Control Engine ──
+// ── ระบบ FSM Control Engine ──
 let current='READY', running=false, timer=null, isSemiAutoMode = false, stepAllowed = false, cycles=0;
 
-// 🌟 แก้ไข: แมตช์คำว่า 'semi' จากปุ่ม HTML และเซ็ตโหมดควบคุมให้ถูกต้อง
 window.switchMode = function(mode) {
   isSemiAutoMode = (mode === 'semi');
   document.getElementById('btnModeSemi').classList.toggle('active-mode', isSemiAutoMode);
   document.getElementById('btnModeAuto').classList.toggle('active-mode', !isSemiAutoMode);
   
-  // ปิดปุ่มยืนยันผลชั่วคราวเมื่อสลับโหมดกึ่งอัตโนมัติ เพื่อป้องกันการกดดักล่วงหน้า
   if (!isSemiAutoMode) {
     stepAllowed = false;
     document.getElementById('btnOK').disabled = true;
@@ -411,7 +424,6 @@ window.switchMode = function(mode) {
   
   addLog(isSemiAutoMode ? '🕹️ Semi-Auto Mode (หยุดรอสัญญาณ OK/NG ในจุดตรวจ)' : '🤖 Auto Mode (รันต่อเนื่องอัตโนมัติ)', isSemiAutoMode ? 'warn' : 'info');
   
-  // ถ้าเครื่องจักรทำงานค้างอยู่ แล้วนิวสับกลับมา Auto ให้ระบบปล่อยไหลขั้นตอนตรวจสอบต่อไปทันที
   if(!isSemiAutoMode && running && stepAllowed) {
     stepAllowed = false;
     triggerNextTransition();
@@ -452,14 +464,12 @@ function setState(id){
   if(!running) return;
 
   timer = setTimeout(() => {
-    // 🌟 เช็คเงื่อนไข: ถ้าเป็นสเตตตรวจสอบความเรียบร้อย และเลือกโหมดกึ่งอัตโนมัติ (Semi-Auto) ไว้ ➔ ให้หยุดนิ่งรอปุ่มกด
     if (s && s.isCheck && isSemiAutoMode) {
       stepAllowed = true;
       document.getElementById('btnOK').disabled = false;
       document.getElementById('btnNG').disabled = false;
       addLog(`[Awaiting] สเตต ${id} รอคำสั่งยืนยันหน้าบอร์ด ➔ กด OK เพื่อไปต่อ หรือ NG เพื่อสั่งหยุด`, 'warn');
     } else {
-      // โหมด Auto หรือสเตตกลไกทั่วไป ➔ ปล่อยไหลอัตโนมัติ
       triggerNextTransition();
     }
   }, ms(id));
@@ -470,7 +480,6 @@ function triggerNextTransition() {
   if(tr.auto) { clearTimeout(timer); const next = tr.auto; if(next) setState(next); }
 }
 
-// 🌟 ฟังก์ชันจัดการปุ่มกดสากล OK / NG หน้างาน
 window.fsmDecision = function(isPassed) {
   if (!running || !isSemiAutoMode || !stepAllowed) return;
   
@@ -482,7 +491,6 @@ window.fsmDecision = function(isPassed) {
     addLog(`✅ Inspection OK [${current}] ➔ ผลการตรวจสอบผ่านเงื่อนไข รันสเตปถัดไป`, 'info');
     triggerNextTransition();
   } else {
-    // ❌ สั่งดีด Interlock หยุดการทำงานฉุกเฉินเมื่อเจอชิ้นงานเสีย (NG)
     running = false;
     clearTimeout(timer);
     document.getElementById('hdot').className = 'hdot';
