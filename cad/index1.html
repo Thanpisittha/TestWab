@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Perfect Local Fixed Rotation)</title>
+  <title>BK05 — Digital Twin (Perfect Locked Center Group Rotation)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -138,7 +138,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบแนวเครื่องจักรอยู่กับที่'}, 
+  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบกึ่งกลางตัวเองอยู่กับที่'}, 
 ];
 
 const TR = {
@@ -177,7 +177,7 @@ resize();
 new ResizeObserver(resize).observe(canvas.parentElement);
 
 // ── Mesh Registry ──
-const meshMap={}, origPos={}, origMat={};
+const meshMap={}, origPos={}, origMat={}, meshCenters={};
 function reg(role,mesh){
   meshMap[role]=mesh;
   origPos[role]=mesh.position.clone();
@@ -224,16 +224,16 @@ function twRot(role,deltaRot,durSec,axis='x',onDone=null){
   document.getElementById('animTag').style.display='block';
 }
 
-// 🌟 ระบบคุมแอนิเมชันสำหรับ Feed_Cerrier: หมุนกลิ้งรอบแกนเครื่องจักรโดยตรงพิกัดนิ่งไม่ส่ายข้ามโลก
-function twLocalAxisRot(role, deltaRot, durSec) {
+// 🌟 ระบบคุมแอนิเมชันคำนวณการหมุนรอบแกนเครื่องจักรโดยตรงที่ระดับ Group วัตถุภาพรวม
+function twGroupWorldAxisRot(role, deltaRot, durSec) {
   const mesh = meshMap[role]; if(!mesh) return;
-  const key = role+'_local_axis_r';
+  const key = role+'_group_axis_r';
   const i = tweens.findIndex(t=>t.role===key); if(i>-1) tweens.splice(i,1);
 
   tweens.push({
     role: key,
     mesh,
-    isLocalAxisRot: true,
+    isGroupAxisRot: true,
     totalAngle: deltaRot,
     dur: durSec,
     elapsed: 0
@@ -269,8 +269,8 @@ function playAnim(id){
       // 2. Roll_1 หมุนรอบแกนตัวเองอยู่กับที่ตรงพิกัดเดิมเป๊ะ (แกน X ท้องถิ่น)
       twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. Feed_Cerrier สั่งแอนิเมชันหมุนรอบตัวเอง สอดคล้องกับแนว Roll_1
-      twLocalAxisRot('feeder_block', Math.PI * 0.5, 0.6/S);
+      // 3. 🌟 Feed_Cerrier สั่งแอนิเมชันหมุนรอบแกนตัวเองผ่านพิกัดสมมาตรร่วม ขนานไปกับแนว Roll_1 สวยงาม
+      twGroupWorldAxisRot('feeder_block', Math.PI * 0.5, 0.6/S);
       break;
 
     case 'INIT':
@@ -289,19 +289,23 @@ function animate(){
     const t=tweens[i]; t.elapsed+=dt;
     const p=Math.min(t.elapsed/t.dur,1), ep=ease(p);
     
-    if(t.isLocalAxisRot) {
-      // 🌟 🌟 บล็อกแก้ไขแกนหมุนให้ขนานเครื่องจักร 100% 🌟 🌟
+    if(t.isGroupAxisRot) {
+      // 🌟 🌟 สมการคำนวณใหม่ขั้นสูง: หมุนทั้งก้อน Group รอบพิกัดศูนย์กลางทางกายภาพ 🌟 🌟
       const currentProgress = ep;
       const lastProgress = ease(Math.min((t.elapsed - dt)/t.dur, 1));
       const deltaAngle = t.totalAngle * (currentProgress - lastProgress);
       
-      // 🛠️ ปรับสมการเด็ด: ดึงทิศทางแกน X ของโลก (World X Axis) 
-      // นำมาแปลงความสัมพันธ์ระดับ Matrix เข้าสู่ท้องถิ่นชิ้นงาน (Object Local Space)
-      // ช่วยให้ชิ้นงานหมุนกลิ้งหน้า-หลัง ขนานแนวเดียวกับล้อแดง Roll_1 เป๊ะ โดยไม่ส่ายเฉียงอีกแล้วครับ!
-      const worldX = new THREE.Vector3(0, 1, 0);
-      const localAxis = t.mesh.worldToLocal(worldX.clone()).normalize();
-      
-      t.mesh.rotateOnAxis(localAxis, deltaAngle);
+      const centerPoint = meshCenters[t.role.replace('_group_axis_r','')];
+      if(centerPoint) {
+        // ดึงแกน X ของโลกเป็นบรรทัดฐานเพื่อให้ทิศทางขนานตรงล็อกแนวเดียวกับ Roll_1 เสมอ
+        const axisWorld = new THREE.Vector3(1, 0, 0);
+        
+        // หมุนกลิ้งรอบจุดศูนย์กลางของกล่องวัตถุภาพรวมโดยตรง ชิ้นงานจึงไม่แตก ไม่บิดเบี้ยว และหมุนลื่นไหลเสถียรครับนิว
+        t.mesh.position.sub(centerPoint);
+        t.mesh.position.applyAxisAngle(axisWorld, deltaAngle);
+        t.mesh.position.add(centerPoint);
+        t.mesh.rotateOnWorldAxis(axisWorld, deltaAngle);
+      }
     }
     else if(t.isRot) {
       t.mesh.rotation[t.rotAxis||'x'] = t.fromRot + (t.toRot - t.fromRot) * ep;
@@ -317,7 +321,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และคัดกรองพิกัดติดตั้งจาก Blender ──
+// ── โหลดไฟล์โมเดล Run.glb และดักจับขอบเขตวัตถุแบบรวมศูนย์ ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -352,22 +356,14 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('roller_feed', obj);
     } 
     else if (obj.name === PART_NAMES.feeder_block) {
-      // ดึงชิ้นส่วนย่อยข้างในมาทำการเซ็ตติ้งจุดศูนย์กลาง (Pivot Center)
-      let innerMesh = null;
-      obj.traverse(child => { if(child.isMesh && !innerMesh) innerMesh = child; });
+      // 🌟 🌟 สำหรับ Feed_Cerrier: ปล่อยเนื้อโมเดลดั้งเดิมจาก Blender ไว้เฉยๆ ไม่รื้อถอนวัตถุภายใน
+      // แต่ใช้สูตรตวงหาพิกัดกึ่งกลางกล่องภาพรวม (Bounding Box) มาเก็บไว้ใช้สับจุดหมุนใน Render Loop
+      const feederBox = new THREE.Box3().setFromObject(obj);
+      const feederCenter = new THREE.Vector3();
+      feederBox.getCenter(feederCenter);
       
-      if(innerMesh && innerMesh.geometry) {
-        innerMesh.geometry.computeBoundingBox();
-        const innerCenter = new THREE.Vector3();
-        innerMesh.geometry.boundingBox.getCenter(innerCenter);
-        
-        innerMesh.geometry.center(); // รวบแกนภายในลูกขยายมาตรงกลางก้อนตัวเองเป๊ะ
-        innerMesh.position.add(innerCenter); // ล็อกชดเชยค่า Offset ไม่ให้ย้ายพิกัดติดตั้งจาก Blender
-        
-        reg('feeder_block', innerMesh); 
-      } else {
-        reg('feeder_block', obj);
-      }
+      meshCenters['feeder_block'] = feederCenter; // บันทึกศูนย์กลางกายภาพของล้อขาว
+      reg('feeder_block', obj); 
     }
   });
   
