@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Auto & Semi-Auto OK/NG System)</title>
+  <title>BK05 — Digital Twin (Perfect Auto & Semi-Auto OK/NG System)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -113,7 +113,7 @@
       <button class="btn danger" id="btnReset" onclick="fsmReset()" disabled>↺ Reset</button>
     </div>
     
-    <div class="sec-title" style="padding:4px 0 2px 0; font-size:9px">Inspection Human-Decision (Semi-Auto)</div>
+    <div class="sec-title" style="padding:4px 0 2px 0; font-size:9px">Inspection Decision (Semi-Auto Mode)</div>
     <div class="btn-row">
       <button class="btn ok-btn" id="btnOK" onclick="fsmDecision(true)" disabled>👍 OK</button>
       <button class="btn ng-btn" id="btnNG" onclick="fsmDecision(false)" disabled>👎 NG</button>
@@ -394,49 +394,72 @@ function addLog(msg,type='info'){
 }
 
 // ── ระบบคุมกลไก FSM Control Engine ──
-let current='READY', running=false, timer=null, isManualMode = false, stepAllowed = false, cycles=0;
+let current='READY', running=false, timer=null, isSemiAutoMode = false, stepAllowed = false, cycles=0;
 
+// 🌟 แก้ไข: แมตช์คำว่า 'semi' จากปุ่ม HTML และเซ็ตโหมดควบคุมให้ถูกต้อง
 window.switchMode = function(mode) {
-  isManualMode = (mode === 'manual');
-  document.getElementById('btnModeManual').classList.toggle('active-mode', isManualMode);
-  document.getElementById('btnModeAuto').classList.toggle('active-mode', !isManualMode);
-  document.getElementById('speedRow').style.opacity = isManualMode ? '0.4' : '1';
+  isSemiAutoMode = (mode === 'semi');
+  document.getElementById('btnModeSemi').classList.toggle('active-mode', isSemiAutoMode);
+  document.getElementById('btnModeAuto').classList.toggle('active-mode', !isSemiAutoMode);
   
-  // ปรับการเปิด/ปิดปุ่มควบคุม Step ทันทีเมื่อสลับโหมดควบคุม
-  document.getElementById('btnStep').disabled = !(running && isManualMode && stepAllowed);
-  addLog(isManualMode ? '🕹️ Manual Mode (กด Step เพื่อขยับทีละบล็อกเงื่อนไข)' : '🤖 Auto Mode', isManualMode ? 'warn' : 'info');
-  
-  if(!isManualMode && running && stepAllowed) {
+  // ปิดปุ่มยืนยันผลชั่วคราวเมื่อสลับโหมดกึ่งอัตโนมัติ เพื่อป้องกันการกดดักล่วงหน้า
+  if (!isSemiAutoMode) {
     stepAllowed = false;
-    document.getElementById('btnStep').disabled = true;
+    document.getElementById('btnOK').disabled = true;
+    document.getElementById('btnNG').disabled = true;
+  }
+  
+  addLog(isSemiAutoMode ? '🕹️ Semi-Auto Mode (หยุดรอสัญญาณ OK/NG ในจุดตรวจ)' : '🤖 Auto Mode (รันต่อเนื่องอัตโนมัติ)', isSemiAutoMode ? 'warn' : 'info');
+  
+  // ถ้าเครื่องจักรทำงานค้างอยู่ แล้วนิวสับกลับมา Auto ให้ระบบปล่อยไหลขั้นตอนตรวจสอบต่อไปทันที
+  if(!isSemiAutoMode && running && stepAllowed) {
+    stepAllowed = false;
     triggerNextTransition();
   }
 }
 
 function setState(id){
-  document.querySelectorAll('.si.active').forEach(e=>{ e.classList.remove('active'); e.classList.add('visited'); });
+  document.querySelectorAll('.si.active').forEach(e=>{ e.classList.remove('active','inspecting'); e.classList.add('visited'); });
   current=id;
-  const el=document.getElementById('si_'+id); if(el){el.classList.remove('visited'); el.classList.add('active');}
+  const el=document.getElementById('si_'+id); 
   const s=STATES.find(x=>x.id===id);
-  document.getElementById('ovState').textContent=id; document.getElementById('ovDesc').textContent=s?.action||'';
-  const dot=document.getElementById('hdot'), hs=document.getElementById('hstatus');
-  dot.className = running ? 'hdot run' : 'hdot'; hs.textContent = running ? 'Running' : 'Idle';
   
-  // ซิงค์การนับรอบเมื่อก้าวผ่านสเตตป้อนสายพานหลัก
+  if(el){
+    el.classList.remove('visited'); el.classList.add('active');
+    if(s && s.isCheck && isSemiAutoMode) el.classList.add('inspecting');
+  }
+  
+  document.getElementById('ovState').textContent=id; document.getElementById('ovDesc').textContent=s?.action||'';
+  document.getElementById('ovState').classList.toggle('inspect-mode', (s?.isCheck && isSemiAutoMode));
+  
+  const dot=document.getElementById('hdot'), hs=document.getElementById('hstatus');
+  if(!running) {
+    dot.className = 'hdot'; hs.textContent = 'Idle';
+    document.getElementById('ovLabel').textContent = "Current State";
+  } else if (s && s.isCheck && isSemiAutoMode) {
+    dot.className = 'hdot inspect'; hs.textContent = 'Awaiting OK / NG Decision...';
+    document.getElementById('ovLabel').textContent = "⚠️ AWAITING QUALITY CHECK";
+  } else {
+    dot.className = 'hdot run'; hs.textContent = 'Running';
+    document.getElementById('ovLabel').textContent = "Current State";
+  }
+
   if(id==='INDEX') { cycles++; document.getElementById('cCycles').textContent=cycles; }
   
   playAnim(id);
-  
   addLog('→ '+id, 'info');
   
   if(!running) return;
 
   timer = setTimeout(() => {
-    if (isManualMode) {
+    // 🌟 เช็คเงื่อนไข: ถ้าเป็นสเตตตรวจสอบความเรียบร้อย และเลือกโหมดกึ่งอัตโนมัติ (Semi-Auto) ไว้ ➔ ให้หยุดนิ่งรอปุ่มกด
+    if (s && s.isCheck && isSemiAutoMode) {
       stepAllowed = true;
-      document.getElementById('btnStep').disabled = false;
-      addLog(`[Ready] สเตท ${id} ทำงานเสร็จเรียบร้อย ➔ กดปุ่ม Step เพื่อไปต่อ`, 'warn');
+      document.getElementById('btnOK').disabled = false;
+      document.getElementById('btnNG').disabled = false;
+      addLog(`[Awaiting] สเตต ${id} รอคำสั่งยืนยันหน้าบอร์ด ➔ กด OK เพื่อไปต่อ หรือ NG เพื่อสั่งหยุด`, 'warn');
     } else {
+      // โหมด Auto หรือสเตตกลไกทั่วไป ➔ ปล่อยไหลอัตโนมัติ
       triggerNextTransition();
     }
   }, ms(id));
@@ -447,11 +470,26 @@ function triggerNextTransition() {
   if(tr.auto) { clearTimeout(timer); const next = tr.auto; if(next) setState(next); }
 }
 
-window.fsmStep = function() { 
-  if(!running || !isManualMode || !stepAllowed) return; 
-  stepAllowed = false; 
-  document.getElementById('btnStep').disabled = true; 
-  triggerNextTransition(); 
+// 🌟 ฟังก์ชันจัดการปุ่มกดสากล OK / NG หน้างาน
+window.fsmDecision = function(isPassed) {
+  if (!running || !isSemiAutoMode || !stepAllowed) return;
+  
+  stepAllowed = false;
+  document.getElementById('btnOK').disabled = true;
+  document.getElementById('btnNG').disabled = true;
+  
+  if (isPassed) {
+    addLog(`✅ Inspection OK [${current}] ➔ ผลการตรวจสอบผ่านเงื่อนไข รันสเตปถัดไป`, 'info');
+    triggerNextTransition();
+  } else {
+    // ❌ สั่งดีด Interlock หยุดการทำงานฉุกเฉินเมื่อเจอชิ้นงานเสีย (NG)
+    running = false;
+    clearTimeout(timer);
+    document.getElementById('hdot').className = 'hdot';
+    document.getElementById('hstatus').textContent = 'STOPPED (NG TRIPPED)';
+    document.getElementById('ovLabel').textContent = "🚨 CRITICAL NG ALERT";
+    addLog(`❌ QUALITY ERROR [${current}]: ชิ้นงานไม่ผ่านเกณฑ์ (NG)! ตัดสัญญาณสวิตช์เครื่องจักรหยุดทันที`, 'err');
+  }
 }
 
 window.fsmStart = function(){ 
@@ -463,33 +501,13 @@ window.fsmStart = function(){
   document.getElementById('btnReset').disabled=false; 
 };
 
-window.fsmDecision = function(isPassed) {
-  if (!running || !isManualMode || !stepAllowed) return;
-  
-  // ลอจิกพิเศษ: ลิงก์ปุ่ม OK / NG ให้ทำหน้าที่คุมสเตปทดแทนชิ้นงานในโหมดกึ่งอัตโนมัติได้อิสระ
-  stepAllowed = false;
-  document.getElementById('btnStep').disabled = true;
-  
-  if (isPassed) {
-    addLog(`✅ Inspection OK [${current}] ➔ ปล่อยผ่านรันสเตปถัดไป`, 'info');
-    triggerNextTransition();
-  } else {
-    running = false;
-    clearTimeout(timer);
-    document.getElementById('hdot').className = 'hdot';
-    document.getElementById('hstatus').textContent = 'STOPPED (NG ALERT)';
-    document.getElementById('ovLabel').textContent = "🚨 CRITICAL STOP";
-    addLog(`❌ INSPECTION NG DETECTED [${current}] ➔ ตรวจพบจุดบกพร่อง! สั่งตัดอินเตอร์ล็อกหยุดระบบทันที`, 'err');
-  }
-}
-
 window.fsmReset = function(){
   clearTimeout(timer); running=false; stepAllowed=false; cycles=0; document.getElementById('cCycles').textContent=0;
   tweens.length=0;
   Object.keys(meshMap).forEach(role=>{
     const m=meshMap[role]; if(m && origPos[role]){ m.position.copy(origPos[role]); if(m._origRot) m.rotation.copy(m._origRot); }
   });
-  document.getElementById('btnStart').disabled=false; document.getElementById('btnStep').disabled=true; document.getElementById('btnReset').disabled=true;
+  document.getElementById('btnStart').disabled=false; document.getElementById('btnReset').disabled=true;
   document.getElementById('btnOK').disabled=true; document.getElementById('btnNG').disabled=true;
   document.getElementById('hdot').className='hdot'; document.getElementById('hstatus').textContent='Idle';
   document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','visited','inspecting'));
