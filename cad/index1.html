@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Perfect Auto & Semi-Auto OK/NG System)</title>
+  <title>Demo — Digital Twin (Perfect Auto & Semi-Auto OK/NG System)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -84,7 +84,7 @@
 </head>
 <body>
 <header>
-  <span class="logo">BK05</span>
+  <span class="logo">Demo</span>
   <span style="color:var(--border)">|</span>
   <span class="htitle">SMD Reel Packing — Dual Mode Control Dashboard</span>
   <div class="hdot" id="hdot"></div>
@@ -274,7 +274,7 @@ function playAnim(id){
 
       if(tapeMesh && origPos['carrier_tape']) {
         tapeMesh.position.copy(origPos['carrier_tape']);
-        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0, 0, 0.2));
+        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0, 0, 2));
         twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 1.0/S, () => {
           tapeMesh.position.copy(origPos['carrier_tape']);
         });
@@ -283,7 +283,7 @@ function playAnim(id){
 
     case 'SEAL_DOWN':
       if(sealMesh && origPos['sealing_head']){
-        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.05, 0));
+        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.5, 0));
         twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 1.0/S);
       }
       break;
