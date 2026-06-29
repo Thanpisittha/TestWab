@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Stable Feeder Engine)</title>
+  <title>BK05 — Digital Twin (Stable Roll Rotation Return)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -14,7 +14,6 @@
     :root{
       --bg:#0a0c0f;--surface:#111318;--surface2:#1a1d24;--border:#2a2d38;
       --text:#e8eaf0;--muted:#6b7080;--teal:#00c9a7;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
-      --green-neon:#00ff88;--red-neon:#ff4444;
     }
     body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
       display:grid;grid-template-columns:1fr 320px;grid-template-rows:48px 1fr;height:100vh;overflow:hidden}
@@ -37,24 +36,16 @@
     .anim-tag{position:absolute;bottom:12px;left:12px;background:rgba(251,191,36,.15);
       border:1px solid var(--amber);border-radius:7px;padding:5px 12px;font-size:11px;color:var(--amber);display:none}
     .panel{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
-    .ctrl{padding:14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;gap:10px}
-    .btn-row{display:flex;gap:6px;width:100%}
+    .ctrl{padding:14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+    .btn-row{display:flex;gap:6px}
     .btn{flex:1;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:11px;
-      font-weight:600;cursor:pointer;background:var(--surface2);color:var(--text);transition:all .2s;
-      display:flex;align-items:center;justify-content:center}
+      font-weight:600;cursor:pointer;background:var(--surface2);color:var(--text);transition:all .2s}
     .btn:hover{border-color:var(--teal);color:var(--text)}
     .btn.primary{background:rgba(0,201,167,.12);color:var(--teal);border-color:var(--teal)}
     .btn.danger{background:rgba(248,113,113,.12);color:var(--red);border-color:var(--red)}
     .btn.active-mode{background:var(--teal);color:#000;border-color:var(--teal)}
-    
-    .btn.ok-sig{background:rgba(0,255,136,0.06);color:var(--green-neon);border:1px solid rgba(0,255,136,0.3);padding:10px;font-size:12px}
-    .btn.ok-sig:hover{background:var(--green-neon);color:#000;box-shadow:0 0 12px var(--green-neon)}
-    .btn.ng-sig{background:rgba(255,68,68,0.06);color:var(--red-neon);border:1px solid rgba(255,68,68,0.3);padding:10px;font-size:12px}
-    .btn.ng-sig:hover{background:var(--red-neon);color:#000;box-shadow:0 0 12px var(--red-neon)}
-    
-    .btn:disabled{opacity:0.15;cursor:not-allowed;pointer-events:none;border-color:var(--border);color:var(--muted);background:var(--surface2);box-shadow:none}
-    
-    .speed-row{display:flex;align-items:center;gap:8px;margin-top:4px}
+    .btn:disabled{opacity:.25;cursor:not-allowed;pointer-events:none}
+    .speed-row{display:flex;align-items:center;gap:8px}
     .slbl{font-size:11px;color:var(--muted);white-space:nowrap}
     input[type=range]{flex:1;accent-color:var(--teal)}
     .sval{font-size:11px;color:var(--teal);min-width:22px;text-align:right}
@@ -108,7 +99,7 @@
 
 <div class="panel">
   <div class="ctrl">
-    <div class="btn-row">
+    <div class="btn-row" style="margin-bottom: 4px;">
       <button class="btn active-mode" id="btnModeAuto" onclick="switchMode('auto')">🤖 Auto</button>
       <button class="btn" id="btnModeManual" onclick="switchMode('manual')">🕹️ Manual</button>
     </div>
@@ -117,12 +108,6 @@
       <button class="btn" id="btnStep" onclick="fsmStep()" disabled style="background:rgba(167,139,250,0.15); color:var(--purple); border-color:var(--purple)">Step ➡️</button>
       <button class="btn danger" id="btnReset" onclick="fsmReset()" disabled>↺ Reset</button>
     </div>
-    
-    <div class="btn-row" style="margin-top: 4px;">
-      <button class="btn ok-sig" id="btnManualOK" onclick="fsmSignal('OK')" disabled>✓ OK (Pass)</button>
-      <button class="btn ng-sig" id="btnManualNG" onclick="fsmSignal('NG')" disabled>✗ NG (Alarm)</button>
-    </div>
-
     <div class="speed-row" id="speedRow">
       <span class="slbl">Speed</span>
       <input type="range" id="spd" min="0.5" max="3" step="0.5" value="1"
@@ -154,7 +139,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const PART_NAMES = {
   carrier_tape: 'Cerrier', 
   roller_feed:  'Roll_1', 
-  feeder_block: 'Feed_Cerrier', 
 };
 
 const STATES = [
@@ -233,6 +217,9 @@ function reg(role,mesh){
   meshMap[role]=mesh;
   origPos[role]=mesh.position.clone();
   mesh._origRot=mesh.rotation.clone(); 
+  if(mesh.material) {
+    origMat[role]=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
+  }
 }
 
 // ── Tween & Animation System ──
@@ -280,28 +267,28 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// ── ระบบคุมสีไฮไลท์แยกวัตถุเดี่ยว/กลุ่มแบบปลอดภัยสูงสุด ──
-function hl(role,mat){
-  const m=meshMap[role]; if(!m) return;
-  m.traverse(child => {
-    if(child.isMesh) child.material = mat;
-  });
-}
+// ── Material ไฮไลท์เรืองแสงนีออน ──
+const hlMat = new THREE.MeshStandardMaterial({
+  color: 0x00ffcc,       
+  emissive: 0x00aa66,    
+  roughness: 0.1,
+  metalness: 0.1
+});
+const alMat = new THREE.MeshStandardMaterial({
+  color: 0xff3333,       
+  emissive: 0xcc0000,    
+  roughness: 0.1
+});
 
+function hl(role,mat){const m=meshMap[role];if(m){m.material=mat;}}
 function restoreAll(){
-  Object.keys(meshMap).forEach(role=>{
-    const m=meshMap[role];
-    if(m) {
-      m.traverse(child => {
-        if(child.isMesh && child.name && origMat[child.name]) {
-          child.material = origMat[child.name].clone();
-        }
-      });
-    }
+  Object.keys(meshMap).forEach(r=>{
+    const m=meshMap[r];
+    if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมลอจิกความเคลื่อนไหว ──
+// ── 🎬 ฟังก์ชันควบคุมการทำงานดั้งเดิมที่เสถียร ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -309,30 +296,20 @@ function playAnim(id){
   switch(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
-      hl('feeder_block', hlMat); 
       
-      // 1. Cerrier เลื่อนหน้าสะสมทีละ 20 ซม. (แกน Z)
+      // Cerrier สวนพุ่งหน้าทีละ 20 ซม. สะสมพิกัดเรื่อยๆ
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.5/S);  
       
-      // 2. Roll_1 หมุนรอบแกนตัวเอง แกน X
+      // Roll_1 ทั้งก้อนหมุนรอบศูนย์กลางตัวเองเป๊ะๆ บนระนาบแกน X ย่อย
       twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'x');
-      
-      // 3. Feed_Cerrier ขยับเลื่อนไปข้างหน้า 20 ซม. (แกน Z) พร้อม ๆ กันขนานกับแนวราง
-      tw('feeder_block', new THREE.Vector3(0, 0, 0.2), 0.5/S);
       break;
 
     case 'INIT':
       ret('carrier_tape', 0.25/S); 
-      ret('feeder_block', 0.20/S);
-      break;
-
-    case 'READY':
-      ret('feeder_block', 0.20/S);
       break;
 
     case 'ALARM':
       hl('carrier_tape', alMat);
-      hl('feeder_block', alMat);
       break;
   }
 }
@@ -357,19 +334,15 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และลำดับขั้นตอนลงทะเบียนใหม่ให้เสถียร ──
+// ── โหลดไฟล์โมเดล Run.glb และจัดพิกัดชดเชยค่าเพี้ยน ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
   
-  // สเตป 1: จัดเก็บโครงสร้างวัสดุลูกข่ายย่อยทั้งหมดลงฐานข้อมูลล่วงหน้าก่อนรันคัดกรอง
   model.traverse(obj => {
     if(obj.isMesh) {
       obj.castShadow = true;
       obj.receiveShadow = true;
-      if(obj.name && obj.material) {
-        origMat[obj.name] = obj.material.clone();
-      }
     }
   });
 
@@ -381,29 +354,22 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.target.copy(center);
   controls.update();
   
-  // สเตป 2: ค้นหาเจาะจงกลุ่มชิ้นส่วน Feed_Cerrier จากรากโครงสร้างโมเดลโดยตรงร้อยเปอร์เซ็นต์
-  const targetFeeder = model.getObjectByName(PART_NAMES.feeder_block);
-  if(targetFeeder) {
-    reg('feeder_block', targetFeeder);
-  }
-
-  // สเตป 3: วนลูปจับคู่ประมวลผลชิ้นส่วนอื่น ๆ ตามปกติ
   model.traverse(obj=>{
+    if(!obj.isMesh) return;
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
-      if(role === 'roller_feed' && obj.isMesh) {
+      if(role === 'roller_feed') {
         obj.geometry.computeBoundingBox();
         const localCenter = new THREE.Vector3();
         obj.geometry.boundingBox.getCenter(localCenter);
-        obj.geometry.center(); 
+        
+        // รวบจุดศูนย์กลางเนื้อโมเดลภายใน และคัดระนาบพิกัดย้อนกลับไปเกาะขาเหล็กเดิมบนเครื่อง
+        obj.geometry.center();
         obj.updateMatrixWorld(true);
         localCenter.applyMatrix4(obj.matrixWorld);
         obj.position.copy(localCenter);
       }
-      // ข้ามตัว feeder_block เพราะเราลงทะเบียนอย่างมั่นคงไว้ข้างบนแล้ว
-      if(role !== 'feeder_block') {
-        reg(role, obj); 
-      }
+      reg(role, obj); 
     }
   });
   
@@ -432,7 +398,6 @@ function addLog(msg,type='info'){
 let current='READY', running=false, timer=null;
 let isManualMode = false; 
 let stepAllowed = false;   
-let signalChoiceRequired = false; 
 let packed=0, cycles=0, alarms=0;
 
 window.switchMode = function(mode) {
@@ -442,47 +407,21 @@ window.switchMode = function(mode) {
     document.getElementById('btnModeAuto').classList.remove('active-mode');
     document.getElementById('speedRow').style.opacity = '0.4'; 
     addLog('🕹️ สลับเข้าสู่โหมดควบคุมทีละสเตป (Manual Mode)', 'warn');
-    if(running) {
-      updateManualButtons();
+    if(running && stepAllowed) {
+      document.getElementById('btnStep').disabled = false;
     }
   } else {
     isManualMode = false;
     document.getElementById('btnModeAuto').classList.add('active-mode');
     document.getElementById('btnModeManual').classList.remove('active-mode');
     document.getElementById('speedRow').style.opacity = '1';
-    
     document.getElementById('btnStep').disabled = true;
-    document.getElementById('btnManualOK').disabled = true;
-    document.getElementById('btnManualNG').disabled = true;
-    
     addLog('🤖 สลับเข้าสู่โหมดอัตโนมัติ (Auto Mode)', 'info');
-    if(running && (stepAllowed || signalChoiceRequired)) {
+    if(running && stepAllowed) {
       stepAllowed = false;
-      signalChoiceRequired = false;
+      document.getElementById('btnStep').disabled = true;
       triggerNextTransition();
     }
-  }
-}
-
-function updateManualButtons() {
-  if (!running || !isManualMode) return;
-  
-  const tr = TR[current];
-  if (!tr) return;
-
-  if (tr.auto) {
-    document.getElementById('btnStep').disabled = false;
-    document.getElementById('btnManualOK').disabled = true;
-    document.getElementById('btnManualNG').disabled = true;
-    stepAllowed = true;
-    signalChoiceRequired = false;
-  } else {
-    document.getElementById('btnStep').disabled = true;
-    document.getElementById('btnManualOK').disabled = false;
-    document.getElementById('btnManualNG').disabled = false;
-    stepAllowed = false;
-    signalChoiceRequired = true;
-    addLog(`[Signal Needed] ระบบจอดรอการตัดสินใจ กรุณากดปุ่ม ✓ OK หรือ ✗ NG บนแผงสีด้านขวา`, 'warn');
   }
 }
 
@@ -515,7 +454,9 @@ function setState(id){
 
   timer = setTimeout(() => {
     if (isManualMode) {
-      updateManualButtons();
+      stepAllowed = true;
+      document.getElementById('btnStep').disabled = false;
+      addLog(`[Ready] สเตท ${id} ทำงานเสร็จแล้ว กดปุ่ม Step เพื่อไปต่อ...`, 'warn');
     } else {
       triggerNextTransition();
     }
@@ -548,29 +489,17 @@ window.fsmStep = function() {
   triggerNextTransition();
 }
 
-window.fsmSignal = function(signal) {
-  if(!running || !isManualMode || !signalChoiceRequired) return;
-  signalChoiceRequired = false;
-  
-  document.getElementById('btnManualOK').disabled = true;
-  document.getElementById('btnManualNG').disabled = true;
-  
-  addLog(`[Manual Input] ส่งสัญญาณยืนยัน: ${signal}`, 'info');
-  advance(signal);
-}
-
 window.fsmStart = function(){
   if(running) return;
   running=true;
   stepAllowed = false;
-  signalChoiceRequired = false;
   document.getElementById('btnStart').disabled=true;
   document.getElementById('btnReset').disabled=false;
   setState('INIT');
 };
 
 window.fsmReset = function(){
-  clearTimeout(timer); running=false; stepAllowed=false; signalChoiceRequired = false;
+  clearTimeout(timer); running=false; stepAllowed=false;
   restoreAll(); tweens.length=0;
   
   Object.keys(meshMap).forEach(role=>{
@@ -585,8 +514,6 @@ window.fsmReset = function(){
   
   document.getElementById('btnStart').disabled=false;
   document.getElementById('btnStep').disabled=true;
-  document.getElementById('btnManualOK').disabled=true;
-  document.getElementById('btnManualNG').disabled=true;
   document.getElementById('btnReset').disabled=true;
   document.getElementById('hdot').className='hdot';
   document.getElementById('hstatus').textContent='Idle';
@@ -594,7 +521,7 @@ window.fsmReset = function(){
   document.getElementById('ovState').textContent='READY';
   document.getElementById('ovState').className='ov-state';
   document.getElementById('ovDesc').textContent='Waiting for Start';
-  current='READY'; addLog('↺ Reset ระบบสถานะและตำแหน่งชิ้นส่วนเครื่องจักรทั้งหมดกลับจุดเริ่มต้นแล้ว','warn');
+  current='READY'; addLog('↺ Reset ระบบสถานะและทิศทางวัตถุกลับจุดเริ่มต้นที่ถูกต้องแล้ว','warn');
 };
 </script>
 </body>
