@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Perfect Intermittent Gear Sync)</title>
+  <title>Demo — Digital Twin (Flawless Gear Phase Sync)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -234,41 +234,38 @@ function playAnim(id){
 
   switch(id){
     case 'SEAL_DOWN':
-      // หัวซีลสับกดลงแนวแกน Y ลึก 5 ซม. (-0.05) นาน 1 วินาที
       if(sealMesh && origPos['sealing_head']){
-        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.05, 0));
+        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.5, 0));
         twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 1.0/S);
       }
       break;
 
     case 'SEAL_UP':
-      // ดึงหัวซีลขึ้นกลับพิกัดตั้งต้น นาน 1 วินาที
       if(sealMesh && origPos['sealing_head']){
         twCustomKey('sealing_up', sealMesh, sealMesh.position, origPos['sealing_head'], 1.0/S);
       }
       break;
 
     case 'FEED_STEP':
-      // 1. สายพาน Cerrier เลื่อนหน้าและแอบวาร์ปกลับล่องหน (ล็อกตำแหน่งอยู่ระหว่างล้อตลอดกาล)
       if(tapeMesh && origPos['carrier_tape']) {
         tapeMesh.position.copy(origPos['carrier_tape']);
-        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0, 0, 0.2));
+        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0, 0, 2));
         
         twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 1.0/S, () => {
           tapeMesh.position.copy(origPos['carrier_tape']);
         });
       }
       
-      // 2. 🔴 ล้อแดงขวา (Roll_1) และม้วนขาวกลาง (Feed_Cerrier) หมุนใน "ทุก ๆ รอบ" ไม่มีข้อยกเว้น
+      // 🔴 ล้อแดงขวา (Roll_1) และม้วนขาวกลาง (Feed_Cerrier) หมุนทุกรอบไม่สนเลขคู่คี่
       twRot('roller_feed', -Math.PI * 2.5, 1.0/S, 'x'); 
       twRot('feeder_block', -Math.PI * 2.5, 1.0/S, 'z'); 
 
-      // 3. 🔵 ล้อน้ำเงินซ้าย (Roll_2) จะยอมหมุนก็ต่อเมื่อเป็น "รอบคู่" เท่านั้น (หาร 2 ลงตัวพอดี)
+      // 🌟 🛠️ แก้ลอจิกตรงนี้: เช็คให้ Roll_2 หมุนเฉพาะรอบคู่สัมบูรณ์ (2, 4, 6...) ชัวร์ 100%
       if (cycles % 2 === 0) {
-        addLog('⚙️ Gear Reduce Event: Roll_2 (Blue) Rotating on Even Cycle: ' + cycles, 'warn');
-        twRot('roller_blue', -Math.PI * 2.5, 1.0/S, 'x'); 
+        addLog('⚙️ Gear Reduce: Roll_2 (Blue) Active on Even Cycle: ' + cycles, 'warn');
+        twRot('roller_blue', -Math.PI * 2.5, 1.0/S, 'x'); // หมุนพร้อมล้อแดงในรอบคู่
       } else {
-        addLog('⚙️ Gear Standby Phase: Roll_2 (Blue) Idle on Odd Cycle: ' + cycles, 'info');
+        addLog('⚙️ Gear Standby: Roll_2 (Blue) Stationary on Odd Cycle: ' + cycles, 'info'); // รอบคี่ (รอบที่ 1) ล้อน้ำเงินจะจอดรอเงียบๆ
       }
       break;
 
@@ -389,10 +386,12 @@ function setState(id){
   const dot=document.getElementById('hdot'), hs=document.getElementById('hstatus');
   dot.className = running ? 'hdot run' : 'hdot'; hs.textContent = running ? 'Running' : 'Idle';
   
+  // 🌟 บังคับสั่งให้คิวบวกบวกค่ารอบย้ายขึ้นมาเช็คสถานะก่อนสั่งเล่นแอนิเมชัน playAnim
+  if(id==='FEED_STEP') { cycles++; document.getElementById('cCycles').textContent=cycles; }
+  
   playAnim(id);
   
   addLog('→ '+id, 'info');
-  if(id==='FEED_STEP') { cycles++; document.getElementById('cCycles').textContent=cycles; }
   
   if(!running) return;
 
