@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Perfect Sealing & Feeding Sequence)</title>
+  <title>BK05 — Digital Twin (Strict Sequential Sealing & Feeding)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -140,7 +140,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'[คิว 1] Sealing กดลง-ยกขึ้นเสร็จ ➡️ [คิว 2] Cerrier ขยับเลื่อนหน้า + Rolls หมุนป้อน'}, 
+  {id:'INDEX',      action:'Sealing กดลง ➡️ ยกขึ้นเสร็จ ➡️ Cerrier เลื่อน 1 สเตป + ล้อหมุนป้อน'}, 
 ];
 
 const TR = {
@@ -149,7 +149,7 @@ const TR = {
   INDEX:       {auto:'INDEX'}, 
 };
 
-// ขยายเวลาสเตท INDEX เป็น 1400ms เพื่อให้ครอบคลุมเวลาแอนิเมชันแบบเรียงลำดับจังหวะอย่างสวยงาม
+// ขยายเวลาสเตท INDEX เป็น 1400ms เพื่อรองรับช่วงเวลา Sealing ทำงานจบ แล้วปล่อยให้ Cerrier วิ่งต่อจนจบกระบวนการ
 const DUR = { INIT:400, READY:600, INDEX:1400 };
 
 window.speedMul = 1;
@@ -226,33 +226,34 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันจัดลำดับคิวแอนิเมชันให้เสถียร (Sequence Control) ──
+// ── 🎬 ฟังก์ชันจัดคิวแอนิเมชันแบบเรียงลำดับขั้นตอนเด็ดขาด (Strict Sequential Logic) ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
 
   switch(id){
     case 'INDEX':
-      // 🌟 [คิวที่ 1]: สั่งให้ชุด Sealing พุ่งกดลงมาก่อน (0.3 วินาที) ตอนที่ทุกอย่างยังจอดนิ่งอยู่กับที่
-      tw('sealing_head', new THREE.Vector3(0, -0.02, 0), 0.3/S, () => {
+      // 1. สั่ง Sealing กดลงมาโดน Cerrier (ใช้เวลา 0.4 วินาที) ตอนที่ทุกอย่างยังนิ่งสนิท
+      tw('sealing_head', new THREE.Vector3(0, -0.02, 0), 0.4/S, () => {
         
-        // เมื่อกดเสร็จปุ๊บ สั่งดีดเด้งยกตัวกลับขึ้นสู่พิกัดเดิมทันที (0.3 วินาที)
-        tw('sealing_head', new THREE.Vector3(0, 0.02, 0), 0.3/S, () => {
+        // 2. พอกดโดนเทปเสร็จเรียบร้อย สั่งให้ Sealing ยกตัวกลับขึ้นไปด้านบนจนสุด (ใช้เวลาอีก 0.4 วินาที)
+        // **จังหวะนี้ ล้อและสายพาน Cerrier ก็ยังคงนิ่งสนิทอยู่**
+        tw('sealing_head', new THREE.Vector3(0, 0.02, 0), 0.4/S, () => {
           
-          // 🌟 [คิวที่ 2]: พอยกหัวซีลพ้นระยะปลอดภัยแล้ว (Callback ทำงานเสร็จสิ้น)
-          // ถึงจะสั่งให้ระบบปล่อยฟีดขยับเดินหน้าพร้อมกันยกแผงทันที! ใช้เวลาทำงาน 0.6 วินาที
-          addLog('⚙️ Sealing Finished ➡️ Executing Feeder Line Sequence', 'info');
+          // 3. 🌟 พอยกหัวซีลเสร็จเรียบร้อย 100% แล้ว (หัวซีลอยู่ด้านบนนิ่งแล้ว) 🌟
+          // ถึงจะสั่งให้ Cerrier เลื่อนหน้า 1 สเตป พร้อมกับม้วนล้อทุกล้อหมุนป้อนตามมาครับนิว!
+          addLog('⚡ Sealing lifted safely ➡️ Moving Cerrier 1 Step & Rotating Rolls', 'warn');
 
-          // 1. Cerrier เลื่อนหน้าตามแนวรางแกน Z ทีละ 20 เซนติเมตร
+          // Cerrier เลื่อนหน้าตามแนวรางแกน Z ทีละ 20 เซนติเมตร (ใช้เวลา 0.6 วินาที)
           tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
           
-          // 2. Roll_1 หมุนตามเข็มนาฬิกา
+          // Roll_1 หมุนตามเข็มนาฬิกา
           twRot('roller_feed', -Math.PI * 0.5, 0.6/S, 'x');
 
-          // 3. Feed_Cerrier หมุนรอบแกน Z ตามเข็มนาฬิกาอยู่กับที่นิ่งสนิท
+          // Feed_Cerrier หมุนรอบแกน Z ตามเข็มนาฬิกาอยู่กับที่
           twRot('feeder_block', -Math.PI * 0.5, 0.6/S, 'z');
 
-          // 4. Roll_2 หมุนตามเข็มนาฬิกาแบบ Gear 2:1 อิงตามรอบลูป
+          // Roll_2 หมุนตามเข็มนาฬิกาแบบ Gear 2:1
           if (cycles % 2 === 0) {
             twRot('roller_blue', -Math.PI * 0.5, 0.6/S, 'x');
           }
@@ -283,7 +284,7 @@ function animate(){
     if(p>=1){ if(t.onDone) t.onDone(); tweens.splice(i,1); }
   }
 
-  // ระบบลูปรีเซ็ตตำแหน่ง Cerrier กลับจุดสตาร์ทเมื่อขยับไปไกล (Fade Out ค่อยๆ จางเพื่อความเนียน)
+  // ระบบลูปรีเซ็ตตำแหน่ง Cerrier กลับจุดสตาร์ทเมื่อขยับไปไกล (Fade Out จางหายวนรอบ)
   const tapeMesh = meshMap['carrier_tape'];
   if (tapeMesh && origPos['carrier_tape']) {
     let distanceMoved = tapeMesh.position.z - origPos['carrier_tape'].z;
@@ -313,7 +314,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และจัดพิกัดเครื่องจักร ──
+// ── โหลดไฟล์โมเดล Run.glb ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene; scene.add(model);
   model.traverse(obj => { if(obj.isMesh) { obj.castShadow = obj.receiveShadow = true; } });
@@ -367,7 +368,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('feeder_block', innerMesh); 
     } else { reg('feeder_block', feederGroup); }
   }
-  addLog(`System Upgraded — Sequential Timing Logic Active`,'info');
+  addLog(`System Upgraded — Strict Sequential Logic Active`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
 // ── UI & Engine Logic ──
