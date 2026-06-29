@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Guaranteed Feeder Latch)</title>
+  <title>BK05 — Digital Twin (Stable Feeder Engine)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -280,10 +280,11 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
+// ── ระบบคุมสีไฮไลท์แยกวัตถุเดี่ยว/กลุ่มแบบปลอดภัยสูงสุด ──
 function hl(role,mat){
   const m=meshMap[role]; if(!m) return;
   m.traverse(child => {
-    if(child.isMesh && child.name && origMat[child.name]) child.material = mat;
+    if(child.isMesh) child.material = mat;
   });
 }
 
@@ -310,14 +311,14 @@ function playAnim(id){
       hl('carrier_tape', hlMat); 
       hl('feeder_block', hlMat); 
       
-      // 1. Cerrier เลื่อนหน้าไปทีละ 20 ซม. (แกน Z)
+      // 1. Cerrier เลื่อนหน้าสะสมทีละ 20 ซม. (แกน Z)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.5/S);  
       
-      // 2. Roll_1 หมุนรอบแกนกลางตัวเองอยู่กับที่ แกน X
+      // 2. Roll_1 หมุนรอบแกนตัวเอง แกน X
       twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'x');
       
       // 3. Feed_Cerrier ขยับเลื่อนไปข้างหน้า 20 ซม. (แกน Z) พร้อม ๆ กันขนานกับแนวราง
-      tw('feeder_block', new THREE.Vector3(0, 0, 2), 0.5/S);
+      tw('feeder_block', new THREE.Vector3(0, 0, 0.2), 0.5/S);
       break;
 
     case 'INIT':
@@ -356,11 +357,12 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb ──
+// ── โหลดไฟล์โมเดล Run.glb และลำดับขั้นตอนลงทะเบียนใหม่ให้เสถียร ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
   
+  // สเตป 1: จัดเก็บโครงสร้างวัสดุลูกข่ายย่อยทั้งหมดลงฐานข้อมูลล่วงหน้าก่อนรันคัดกรอง
   model.traverse(obj => {
     if(obj.isMesh) {
       obj.castShadow = true;
@@ -379,12 +381,13 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.target.copy(center);
   controls.update();
   
-  // 🌟 🌟 จุดแก้ไขดักบั๊กสำคัญ: เจาะจงดึงวัตถุกล่องกลุ่ม Feed_Cerrier ออกมาจากก้อนโมเดลตรงๆ โดยตรงเพื่อความชัวร์ 🌟 🌟
+  // สเตป 2: ค้นหาเจาะจงกลุ่มชิ้นส่วน Feed_Cerrier จากรากโครงสร้างโมเดลโดยตรงร้อยเปอร์เซ็นต์
   const targetFeeder = model.getObjectByName(PART_NAMES.feeder_block);
   if(targetFeeder) {
     reg('feeder_block', targetFeeder);
   }
 
+  // สเตป 3: วนลูปจับคู่ประมวลผลชิ้นส่วนอื่น ๆ ตามปกติ
   model.traverse(obj=>{
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
@@ -397,7 +400,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
         localCenter.applyMatrix4(obj.matrixWorld);
         obj.position.copy(localCenter);
       }
-      // ลงทะเบียนวัตถุชิ้นอื่นปกติ ยกเว้นตัวป้อนที่ถูกดักผูกระบบไว้ด้านบนแล้ว
+      // ข้ามตัว feeder_block เพราะเราลงทะเบียนอย่างมั่นคงไว้ข้างบนแล้ว
       if(role !== 'feeder_block') {
         reg(role, obj); 
       }
@@ -573,4 +576,26 @@ window.fsmReset = function(){
   Object.keys(meshMap).forEach(role=>{
     const m=meshMap[role];
     if(m && origPos[role]){
-      m.position.copy(origPos
+      m.position.copy(origPos[role]); 
+      if(m._origRot) {
+        m.rotation.copy(m._origRot); 
+      }
+    }
+  });
+  
+  document.getElementById('btnStart').disabled=false;
+  document.getElementById('btnStep').disabled=true;
+  document.getElementById('btnManualOK').disabled=true;
+  document.getElementById('btnManualNG').disabled=true;
+  document.getElementById('btnReset').disabled=true;
+  document.getElementById('hdot').className='hdot';
+  document.getElementById('hstatus').textContent='Idle';
+  document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','visited','alarm-s'));
+  document.getElementById('ovState').textContent='READY';
+  document.getElementById('ovState').className='ov-state';
+  document.getElementById('ovDesc').textContent='Waiting for Start';
+  current='READY'; addLog('↺ Reset ระบบสถานะและตำแหน่งชิ้นส่วนเครื่องจักรทั้งหมดกลับจุดเริ่มต้นแล้ว','warn');
+};
+</script>
+</body>
+</html>
