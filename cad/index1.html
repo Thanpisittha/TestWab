@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (3-Core Mechanism Only)</title>
+  <title>BK05 — Digital Twin (3-Core Stable Demo)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -135,7 +135,6 @@ const PART_NAMES = {
   feeder_block: 'Feed_Cerrier', 
 };
 
-// 🌟 🌟 เหลือสเตตไว้แค่นี้พอ เพื่อดูการทำงานฟีดแกนหลักทั้ง 3 ส่วน 🌟 🌟
 const STATES = [
   {id:'INIT',        action:'Initialize System'},
   {id:'READY',       action:'Waiting for Start'},
@@ -145,7 +144,7 @@ const STATES = [
 const TR = {
   INIT:        {auto:'READY'},
   READY:       {auto:'INDEX'},
-  INDEX:       {auto:'INDEX'}, // วนลูปรันสเตต INDEX ซ้ำไปเรื่อยๆ เพื่อฟีดสายต่อเนื่อง
+  INDEX:       {auto:'INDEX'}, 
 };
 
 const DUR = { INIT:400, READY:600, INDEX:1000 };
@@ -183,9 +182,6 @@ function reg(role,mesh){
   meshMap[role]=mesh;
   origPos[role]=mesh.position.clone();
   mesh._origRot=mesh.rotation.clone(); 
-  if(mesh.material) {
-    origMat[role]=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
-  }
 }
 
 // ── Tween & Animation System ──
@@ -233,7 +229,7 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// Material ไฮไลท์นีออนสีเขียวเรืองแสงตอนขยับ
+// ── ปรับปรุงระบบสีแบบสแกนหาชิ้นย่อย ป้องกันเออเรอร์ของ Group ──
 const hlMat = new THREE.MeshStandardMaterial({
   color: 0x00ffcc,       
   emissive: 0x00aa66,    
@@ -241,15 +237,27 @@ const hlMat = new THREE.MeshStandardMaterial({
   metalness: 0.1
 });
 
-function hl(role,mat){const m=meshMap[role];if(m){m.material=mat;}}
-function restoreAll(){
-  Object.keys(meshMap).forEach(r=>{
-    const m=meshMap[r];
-    if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
+function hl(role,mat){
+  const m=meshMap[role]; if(!m) return;
+  m.traverse(child => {
+    if(child.isMesh) child.material = mat;
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมการทำงานขยับ 3 อุปกรณ์พร้อมกัน ──
+function restoreAll(){
+  Object.keys(meshMap).forEach(role=>{
+    const m=meshMap[role];
+    if(m) {
+      m.traverse(child => {
+        if(child.isMesh && child.name && origMat[child.name]) {
+          child.material = origMat[child.name].clone();
+        }
+      });
+    }
+  });
+}
+
+// ── 🎬 ฟังก์ชันควบคุมการทำงานขยับ ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -260,13 +268,13 @@ function playAnim(id){
       hl('roller_feed', hlMat);
       hl('feeder_block', hlMat);
       
-      // 1. Cerrier เลื่อนหน้าทีละ 20 ซม. (แกน Z)
+      // 1. Cerrier เลื่อนพุ่งหน้าสะสม (แกน Z)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 หมุนรอบตัวเองอยู่กับที่ แกน X ดั้งเดิมที่ถูกต้อง
+      // 2. Roll_1 หมุนรอบตัวเองอยู่กับที่ แกน X
       twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. Feed_Cerrier หมุนรอบตัวเองอยู่กับที่ พิกัดล็อกเดิม แกน X ดั้งเดิมที่ถูกต้อง
+      // 3. Feed_Cerrier หมุนรอบตัวเองอยู่กับที่เป๊ะๆ ตามระบบล็อกพิกัด แกน X
       twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'x');
       break;
 
@@ -296,15 +304,19 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และจัดพิกัดชดเชยค่า Pivot ที่แม่นยำ ──
+// ── โหลดไฟล์โมเดล Run.glb และแก้ปัญหาเรื่อง Group Origin ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
   
+  // บันทึกสำรองวัสดุแยกตามรายชื่อชิ้นย่อยรายตัวเพื่อความเสถียรของสี
   model.traverse(obj => {
     if(obj.isMesh) {
       obj.castShadow = true;
       obj.receiveShadow = true;
+      if(obj.name && obj.material) {
+        origMat[obj.name] = obj.material.clone();
+      }
     }
   });
 
@@ -316,26 +328,33 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.target.copy(center);
   controls.update();
   
+  // 🌟 บังคับดักดึงวัตถุกลุ่มกลุ่ม Feed_Cerrier ออกมาจากก้อนหลักโดยตรง 🌟
+  const targetFeeder = model.getObjectByName(PART_NAMES.feeder_block);
+  if(targetFeeder) {
+    reg('feeder_block', targetFeeder);
+  }
+
   model.traverse(obj=>{
-    if(!obj.isMesh) return;
+    // 🌟 เอาคำสั่ง !obj.isMesh ออก เพื่อยอมให้ดึงค่าแกนหมุนของวัตถุอื่นๆ ได้สมบูรณ์
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
-      // ชดเชยพิกัดเยื้องศูนย์ให้กับม้วนหมุนทั้งคู่ ให้ล็อกเข้าแกนเดิมเป๊ะๆ
-      if(role === 'roller_feed' || role === 'feeder_block') {
+      if(role === 'roller_feed' && obj.isMesh) {
         obj.geometry.computeBoundingBox();
         const localCenter = new THREE.Vector3();
         obj.geometry.boundingBox.getCenter(localCenter);
-        
         obj.geometry.center(); 
         obj.updateMatrixWorld(true);
         localCenter.applyMatrix4(obj.matrixWorld);
         obj.position.copy(localCenter);
       }
-      reg(role, obj); 
+      // ข้าม feeder_block เพราะถูกผูกระบบล็อกพิกัดไว้ด้านบนแล้วอย่างเสถียร
+      if(role !== 'feeder_block') {
+        reg(role, obj); 
+      }
     }
   });
   
-  addLog(`GLB loaded — จับคู่ชิ้นส่วนหลักเสร็จสิ้น [${Object.keys(meshMap).join(', ')}]`,'info');
+  addLog(`GLB loaded — จับคู่ชิ้นส่วนหลักสำเร็จ [${Object.keys(meshMap).join(', ')}]`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
 // ── UI Generation ──
@@ -356,7 +375,7 @@ function addLog(msg,type='info'){
   b.appendChild(el);b.scrollTop=b.scrollHeight;
 }
 
-// ── ระบบ FSM Engine (ปรับลูปลดหลั่นขั้นตอน) ──
+// ── ระบบ FSM Engine ──
 let current='READY', running=false, timer=null;
 let isManualMode = false; 
 let stepAllowed = false;   
@@ -421,6 +440,8 @@ function setState(id){
     }
   }, ms(id));
 }
+
+function triggerNextTransition() { advance('auto'); }
 
 function advance(sig){
   if(!running) return;
