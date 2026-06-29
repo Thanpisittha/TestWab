@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Manual OK/NG Signal Buttons)</title>
+  <title>BK05 — Digital Twin (Guaranteed Feeder Latch)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -14,7 +14,7 @@
     :root{
       --bg:#0a0c0f;--surface:#111318;--surface2:#1a1d24;--border:#2a2d38;
       --text:#e8eaf0;--muted:#6b7080;--teal:#00c9a7;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
-      --green-btn:#10b981;--red-btn:#ef4444;
+      --green-neon:#00ff88;--red-neon:#ff4444;
     }
     body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
       display:grid;grid-template-columns:1fr 320px;grid-template-rows:48px 1fr;height:100vh;overflow:hidden}
@@ -24,7 +24,7 @@
     .htitle{font-size:12px;color:var(--muted)}
     .hdot{width:8px;height:8px;border-radius:50%;background:#4b5563;margin-left:auto;transition:background .3s}
     .hdot.run{background:var(--teal);box-shadow:0 0 6px var(--teal)}
-    .hdot.alarm Whitespace{background:var(--red);box-shadow:0 0 6px var(--red)}
+    .hdot.alarm{background:var(--red);box-shadow:0 0 6px var(--red)}
     #hstatus{font-size:12px;color:var(--muted);margin-left:6px}
     #canvas-wrap{position:relative;background:#06080a}
     canvas{display:block;width:100%;height:100%}
@@ -37,23 +37,24 @@
     .anim-tag{position:absolute;bottom:12px;left:12px;background:rgba(251,191,36,.15);
       border:1px solid var(--amber);border-radius:7px;padding:5px 12px;font-size:11px;color:var(--amber);display:none}
     .panel{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
-    .ctrl{padding:14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
-    .btn-row{display:flex;gap:6px}
+    .ctrl{padding:14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;gap:10px}
+    .btn-row{display:flex;gap:6px;width:100%}
     .btn{flex:1;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:11px;
-      font-weight:600;cursor:pointer;background:var(--surface2);color:var(--text);transition:all .2s}
+      font-weight:600;cursor:pointer;background:var(--surface2);color:var(--text);transition:all .2s;
+      display:flex;align-items:center;justify-content:center}
     .btn:hover{border-color:var(--teal);color:var(--text)}
     .btn.primary{background:rgba(0,201,167,.12);color:var(--teal);border-color:var(--teal)}
     .btn.danger{background:rgba(248,113,113,.12);color:var(--red);border-color:var(--red)}
     .btn.active-mode{background:var(--teal);color:#000;border-color:var(--teal)}
-    .btn:disabled{opacity:.15;cursor:not-allowed;pointer-events:none}
     
-    /* สไตล์ปุ่มกดสัญญาณ OK / NG ตัวใหม่ */
-    .btn.ok-sig{background:rgba(16,185,129,0.15);color:var(--green-btn);border-color:var(--green-btn)}
-    .btn.ok-sig:hover{background:var(--green-btn);color:#000}
-    .btn.ng-sig{background:rgba(239,68,68,0.15);color:var(--red-btn);border-color:var(--red-btn)}
-    .btn.ng-sig:hover{background:var(--red-btn);color:#000}
-
-    .speed-row{display:flex;align-items:center;gap:8px}
+    .btn.ok-sig{background:rgba(0,255,136,0.06);color:var(--green-neon);border:1px solid rgba(0,255,136,0.3);padding:10px;font-size:12px}
+    .btn.ok-sig:hover{background:var(--green-neon);color:#000;box-shadow:0 0 12px var(--green-neon)}
+    .btn.ng-sig{background:rgba(255,68,68,0.06);color:var(--red-neon);border:1px solid rgba(255,68,68,0.3);padding:10px;font-size:12px}
+    .btn.ng-sig:hover{background:var(--red-neon);color:#000;box-shadow:0 0 12px var(--red-neon)}
+    
+    .btn:disabled{opacity:0.15;cursor:not-allowed;pointer-events:none;border-color:var(--border);color:var(--muted);background:var(--surface2);box-shadow:none}
+    
+    .speed-row{display:flex;align-items:center;gap:8px;margin-top:4px}
     .slbl{font-size:11px;color:var(--muted);white-space:nowrap}
     input[type=range]{flex:1;accent-color:var(--teal)}
     .sval{font-size:11px;color:var(--teal);min-width:22px;text-align:right}
@@ -107,7 +108,7 @@
 
 <div class="panel">
   <div class="ctrl">
-    <div class="btn-row" style="margin-bottom: 4px;">
+    <div class="btn-row">
       <button class="btn active-mode" id="btnModeAuto" onclick="switchMode('auto')">🤖 Auto</button>
       <button class="btn" id="btnModeManual" onclick="switchMode('manual')">🕹️ Manual</button>
     </div>
@@ -117,9 +118,9 @@
       <button class="btn danger" id="btnReset" onclick="fsmReset()" disabled>↺ Reset</button>
     </div>
     
-    <div class="btn-row" style="margin-top: 2px;">
-      <button class="btn ok-sig" id="btnManualOK" onclick="fsmSignal('OK')" disabled>✓ OK</button>
-      <button class="btn ng-sig" id="btnManualNG" onclick="fsmSignal('NG')" disabled>✗ NG</button>
+    <div class="btn-row" style="margin-top: 4px;">
+      <button class="btn ok-sig" id="btnManualOK" onclick="fsmSignal('OK')" disabled>✓ OK (Pass)</button>
+      <button class="btn ng-sig" id="btnManualNG" onclick="fsmSignal('NG')" disabled>✗ NG (Alarm)</button>
     </div>
 
     <div class="speed-row" id="speedRow">
@@ -308,9 +309,15 @@ function playAnim(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
       hl('feeder_block', hlMat); 
+      
+      // 1. Cerrier เลื่อนหน้าไปทีละ 20 ซม. (แกน Z)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.5/S);  
+      
+      // 2. Roll_1 หมุนรอบแกนกลางตัวเองอยู่กับที่ แกน X
       twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'x');
-      tw('feeder_block', new THREE.Vector3(0, 0, 0.2), 0.5/S);
+      
+      // 3. Feed_Cerrier ขยับเลื่อนไปข้างหน้า 20 ซม. (แกน Z) พร้อม ๆ กันขนานกับแนวราง
+      tw('feeder_block', new THREE.Vector3(0, 0, 2), 0.5/S);
       break;
 
     case 'INIT':
@@ -372,6 +379,12 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.target.copy(center);
   controls.update();
   
+  // 🌟 🌟 จุดแก้ไขดักบั๊กสำคัญ: เจาะจงดึงวัตถุกล่องกลุ่ม Feed_Cerrier ออกมาจากก้อนโมเดลตรงๆ โดยตรงเพื่อความชัวร์ 🌟 🌟
+  const targetFeeder = model.getObjectByName(PART_NAMES.feeder_block);
+  if(targetFeeder) {
+    reg('feeder_block', targetFeeder);
+  }
+
   model.traverse(obj=>{
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
@@ -384,7 +397,10 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
         localCenter.applyMatrix4(obj.matrixWorld);
         obj.position.copy(localCenter);
       }
-      reg(role, obj); 
+      // ลงทะเบียนวัตถุชิ้นอื่นปกติ ยกเว้นตัวป้อนที่ถูกดักผูกระบบไว้ด้านบนแล้ว
+      if(role !== 'feeder_block') {
+        reg(role, obj); 
+      }
     }
   });
   
@@ -413,7 +429,7 @@ function addLog(msg,type='info'){
 let current='READY', running=false, timer=null;
 let isManualMode = false; 
 let stepAllowed = false;   
-let signalChoiceRequired = false; // ตัวแปรล็อกสำหรับตรวจสอบสเตตทางเลือก (OK/NG)
+let signalChoiceRequired = false; 
 let packed=0, cycles=0, alarms=0;
 
 window.switchMode = function(mode) {
@@ -432,7 +448,6 @@ window.switchMode = function(mode) {
     document.getElementById('btnModeManual').classList.remove('active-mode');
     document.getElementById('speedRow').style.opacity = '1';
     
-    // ปิดปุ่มแมนนวลทั้งหมด
     document.getElementById('btnStep').disabled = true;
     document.getElementById('btnManualOK').disabled = true;
     document.getElementById('btnManualNG').disabled = true;
@@ -446,7 +461,6 @@ window.switchMode = function(mode) {
   }
 }
 
-// 🌟 ฟังก์ชันคุมการตัดเปิด-ปิด ปุ่มกดแบบแมนนวลตามสเตตปัจจุบันของเครื่องจักร
 function updateManualButtons() {
   if (!running || !isManualMode) return;
   
@@ -454,20 +468,18 @@ function updateManualButtons() {
   if (!tr) return;
 
   if (tr.auto) {
-    // สเตตทั่วไป (เช่น INDEX, INIT, READY) -> ให้ใช้ปุ่ม Step ➡️ เพื่อไปต่อ
     document.getElementById('btnStep').disabled = false;
     document.getElementById('btnManualOK').disabled = true;
     document.getElementById('btnManualNG').disabled = true;
     stepAllowed = true;
     signalChoiceRequired = false;
   } else {
-    // สเตตตรวจสอบเงื่อนไข (เช่น SEAL_CHECK, VISION) -> ปิดปุ่ม Step แล้วเปิดปุ่ม ✓ OK / ✗ NG ให้เลือกกดแทน!
     document.getElementById('btnStep').disabled = true;
     document.getElementById('btnManualOK').disabled = false;
     document.getElementById('btnManualNG').disabled = false;
     stepAllowed = false;
     signalChoiceRequired = true;
-    addLog(`[Signal Needed] กรุณากดปุ่ม ✓ OK หรือ ✗ NG เพื่อส่งสัญญาณตรวจสอบของสเตต ${current}`, 'warn');
+    addLog(`[Signal Needed] ระบบจอดรอการตัดสินใจ กรุณากดปุ่ม ✓ OK หรือ ✗ NG บนแผงสีด้านขวา`, 'warn');
   }
 }
 
@@ -512,7 +524,6 @@ function triggerNextTransition() {
   if(tr.auto){
     advance('auto');
   } else {
-    // โหมด Auto จะสุ่มค่าความน่าจะเป็นให้ปกติ
     const prob = PROB[current] ?? 0.9;
     const result = Math.random() < prob ? 'OK' : 'NG';
     timer = setTimeout(() => advance(result), 100);
@@ -527,7 +538,6 @@ function advance(sig){
   if(next) setState(next);
 }
 
-// 🌟 ปุ่มคุมสเตปปกติ
 window.fsmStep = function() {
   if(!running || !isManualMode || !stepAllowed) return;
   stepAllowed = false;
@@ -535,16 +545,14 @@ window.fsmStep = function() {
   triggerNextTransition();
 }
 
-// 🌟 ฟังก์ชันรองรับปุ่มกดส่งสัญญาณ OK / NG ทางเลือกโหมดแมนนวลแบบเจาะจง
 window.fsmSignal = function(signal) {
   if(!running || !isManualMode || !signalChoiceRequired) return;
   signalChoiceRequired = false;
   
-  // ล็อกปิดปุ่มทันทีเมื่อกดยืนยันแล้ว
   document.getElementById('btnManualOK').disabled = true;
   document.getElementById('btnManualNG').disabled = true;
   
-  addLog(`[Manual Input] คุณส่งสัญญาณ: ${signal}`, 'info');
+  addLog(`[Manual Input] ส่งสัญญาณยืนยัน: ${signal}`, 'info');
   advance(signal);
 }
 
@@ -565,26 +573,4 @@ window.fsmReset = function(){
   Object.keys(meshMap).forEach(role=>{
     const m=meshMap[role];
     if(m && origPos[role]){
-      m.position.copy(origPos[role]); 
-      if(m._origRot) {
-        m.rotation.copy(m._origRot); 
-      }
-    }
-  });
-  
-  document.getElementById('btnStart').disabled=false;
-  document.getElementById('btnStep').disabled=true;
-  document.getElementById('btnManualOK').disabled=true;
-  document.getElementById('btnManualNG').disabled=true;
-  document.getElementById('btnReset').disabled=true;
-  document.getElementById('hdot').className='hdot';
-  document.getElementById('hstatus').textContent='Idle';
-  document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','visited','alarm-s'));
-  document.getElementById('ovState').textContent='READY';
-  document.getElementById('ovState').className='ov-state';
-  document.getElementById('ovDesc').textContent='Waiting for Start';
-  current='READY'; addLog('↺ Reset ระบบสถานะและตำแหน่งชิ้นส่วนเครื่องจักรทั้งหมดกลับจุดเริ่มต้นแล้ว','warn');
-};
-</script>
-</body>
-</html>
+      m.position.copy(origPos
