@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (3-Core Stable Demo)</title>
+  <title>BK05 — Digital Twin (Independent Dual Roll Rotation)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -138,7 +138,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',        action:'Initialize System'},
   {id:'READY',       action:'Waiting for Start'},
-  {id:'INDEX',       action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุน'}, 
+  {id:'INDEX',       action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบตัวเอง'}, 
 ];
 
 const TR = {
@@ -182,6 +182,9 @@ function reg(role,mesh){
   meshMap[role]=mesh;
   origPos[role]=mesh.position.clone();
   mesh._origRot=mesh.rotation.clone(); 
+  if(mesh.material) {
+    origMat[role]=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
+  }
 }
 
 // ── Tween & Animation System ──
@@ -229,7 +232,6 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// ── ปรับปรุงระบบสีแบบสแกนหาชิ้นย่อย ป้องกันเออเรอร์ของ Group ──
 const hlMat = new THREE.MeshStandardMaterial({
   color: 0x00ffcc,       
   emissive: 0x00aa66,    
@@ -237,27 +239,15 @@ const hlMat = new THREE.MeshStandardMaterial({
   metalness: 0.1
 });
 
-function hl(role,mat){
-  const m=meshMap[role]; if(!m) return;
-  m.traverse(child => {
-    if(child.isMesh) child.material = mat;
-  });
-}
-
+function hl(role,mat){const m=meshMap[role];if(m){m.material=mat;}}
 function restoreAll(){
-  Object.keys(meshMap).forEach(role=>{
-    const m=meshMap[role];
-    if(m) {
-      m.traverse(child => {
-        if(child.isMesh && child.name && origMat[child.name]) {
-          child.material = origMat[child.name].clone();
-        }
-      });
-    }
+  Object.keys(meshMap).forEach(r=>{
+    const m=meshMap[r];
+    if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมการทำงานขยับ ──
+// ── 🎬 ฟังก์ชันควบคุมแอนิเมชัน ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -268,13 +258,13 @@ function playAnim(id){
       hl('roller_feed', hlMat);
       hl('feeder_block', hlMat);
       
-      // 1. Cerrier เลื่อนพุ่งหน้าสะสม (แกน Z)
+      // 1. Cerrier เลื่อนหน้าไปตามราง (แกน Z)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 หมุนรอบตัวเองอยู่กับที่ แกน X
+      // 2. Roll_1 หมุนรอบตัวเองอยู่กับที่เป๊ะๆ บนระนาบแกน X 
       twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. Feed_Cerrier หมุนรอบตัวเองอยู่กับที่เป๊ะๆ ตามระบบล็อกพิกัด แกน X
+      // 3. 🌟 Feed_Cerrier สั่งหมุนรอบแกนกลางของตัวเองอยู่กับร่องเหล็กเดิม ไม่แกว่งอ้อมรอบล้ออื่นแล้ว!
       twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'x');
       break;
 
@@ -304,19 +294,15 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และแก้ปัญหาเรื่อง Group Origin ──
+// ── โหลดไฟล์โมเดล Run.glb และแก้ไขลอจิกคํานวณย้าย Pivot ระดับลูกข่ายย่อยดักบั๊ก ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
   
-  // บันทึกสำรองวัสดุแยกตามรายชื่อชิ้นย่อยรายตัวเพื่อความเสถียรของสี
   model.traverse(obj => {
     if(obj.isMesh) {
       obj.castShadow = true;
       obj.receiveShadow = true;
-      if(obj.name && obj.material) {
-        origMat[obj.name] = obj.material.clone();
-      }
     }
   });
 
@@ -328,33 +314,39 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.target.copy(center);
   controls.update();
   
-  // 🌟 บังคับดักดึงวัตถุกลุ่มกลุ่ม Feed_Cerrier ออกมาจากก้อนหลักโดยตรง 🌟
-  const targetFeeder = model.getObjectByName(PART_NAMES.feeder_block);
-  if(targetFeeder) {
-    reg('feeder_block', targetFeeder);
-  }
-
-  model.traverse(obj=>{
-    // 🌟 เอาคำสั่ง !obj.isMesh ออก เพื่อยอมให้ดึงค่าแกนหมุนของวัตถุอื่นๆ ได้สมบูรณ์
+  model.traverse(obj => {
+    // แก้ไขดักฟิลเตอร์: ยอมรับทั้งวัตถุที่เป็นชิ้นเดี่ยว (Mesh) และก้อนวัตถุที่ครอบอยู่
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
-      if(role === 'roller_feed' && obj.isMesh) {
-        obj.geometry.computeBoundingBox();
-        const localCenter = new THREE.Vector3();
-        obj.geometry.boundingBox.getCenter(localCenter);
-        obj.geometry.center(); 
-        obj.updateMatrixWorld(true);
-        localCenter.applyMatrix4(obj.matrixWorld);
-        obj.position.copy(localCenter);
+      
+      // 🛠️ 🛠️ คีย์หลักการแก้ไข: บังคับเจาะลึกลงไปหาชิ้น Geometry เพื่อสั่งย้าย Pivot มาไว้ตรงกลางก้อนวัตถุของตัวมันเองเด็ดขาด
+      if(role === 'roller_feed' || role === 'feeder_block') {
+        
+        // ค้นหา Mesh จริงที่ซ่อนตัวอยู่ข้างในโครงสร้าง เพื่อดึงบัฟเฟอร์พิกัดมาคำนวณจุดกึ่งกลาง
+        let targetMesh = obj;
+        if(!obj.isMesh) {
+          obj.traverse(child => { if(child.isMesh && !targetMesh.geometry) targetMesh = child; });
+        }
+        
+        if(targetMesh && targetMesh.geometry) {
+          targetMesh.geometry.computeBoundingBox();
+          const localCenter = new THREE.Vector3();
+          targetMesh.geometry.boundingBox.getCenter(localCenter);
+          
+          // สั่งจัดจุด Origin ของโมเดลให้มาอยู่จุดกึ่งกลางเนื้อตัวเองแท้ๆ สกัดกั้นการแกว่งควงข้ามแกน
+          targetMesh.geometry.center();
+          
+          // นำค่า Matrix ระยะเอียงดั้งเดิมจาก Blender คำนวณชดเชยคืนให้ตำแหน่งหลักเพื่อให้ล็อกสนิทเข้าพิกัดโครงสร้างเดิม
+          obj.updateMatrixWorld(true);
+          localCenter.applyMatrix4(obj.matrixWorld);
+          obj.position.copy(localCenter);
+        }
       }
-      // ข้าม feeder_block เพราะถูกผูกระบบล็อกพิกัดไว้ด้านบนแล้วอย่างเสถียร
-      if(role !== 'feeder_block') {
-        reg(role, obj); 
-      }
+      reg(role, obj); 
     }
   });
   
-  addLog(`GLB loaded — จับคู่ชิ้นส่วนหลักสำเร็จ [${Object.keys(meshMap).join(', ')}]`,'info');
+  addLog(`GLB loaded — จับคู่ชิ้นส่วนหลักเสร็จสิ้น [${Object.keys(meshMap).join(', ')}]`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
 // ── UI Generation ──
