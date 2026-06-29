@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Perfect Locked Position Demo)</title>
+  <title>BK05 — Digital Twin (Perfect 3-Core Simplified Fixed)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -232,7 +232,6 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-function hl(role,mat){const m=meshMap[role];if(m){m.material=mat;}}
 function restoreAll(){
   Object.keys(meshMap).forEach(r=>{
     const m=meshMap[r];
@@ -247,15 +246,13 @@ function playAnim(id){
 
   switch(id){
     case 'INDEX':
-      hl('carrier_tape', hlMat); 
-      
-      // 1. Cerrier เลื่อนหน้าตามรางพิกัดเดิมสะสมเรื่อยๆ (แกน Z)
+      // 1. Cerrier เลื่อนพุ่งหน้าตามราง (แกน Z) ระยะสะสมต่อเนื่องตรงเป๊ะ
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 หมุนรอบแกนกลางตัวเองอยู่กับพิกัดเครื่องเดิมเป๊ะ (แกน X)
+      // 2. Roll_1 หมุนรอบตัวเองอยู่กับพิกัดเครื่องเดิมเป๊ะ (แกน X ท้องถิ่น)
       twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. 🌟 Feed_Cerrier สั่งแอนิเมชันหมุนรอบตัวเองที่แกน X ท้องถิ่นของตัวมันเองแล้วครับ!
+      // 3. 🌟 Feed_Cerrier สั่งแอนิเมชันหมุนรอบแกนตัวเอง โดยตำแหน่งจะล็อกนิ่งอยู่ตำแหน่ง Blender เดิมเป๊ะไม่เคลื่อนที่ลอยหาย!
       twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'x');
       break;
 
@@ -285,7 +282,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และล็อกตำแหน่งดั้งเดิมจาก Blender ไว้ 100% ──
+// ── โหลดไฟล์โมเดล Run.glb และแก้ไขลอจิกคํานวณย้าย Pivot แบบเน้นความเสถียรของพิกัดติดตั้ง ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -305,34 +302,40 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.target.copy(center);
   controls.update();
   
+  // 🌟 🌟 ปลดล็อกลูปสแกนหาวัตถุ: อนุญาตให้ดึงได้หมดไม่ว่าจะเป็น Group หรือ Mesh ทำให้ระบบไม่ขัดข้อง 🌟 🌟
   model.traverse(obj => {
-    if(!obj.isMesh) return;
-    const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
-    if(role) {
+    if (obj.name === PART_NAMES.carrier_tape) {
+      reg('carrier_tape', obj);
+    } 
+    else if (obj.name === PART_NAMES.roller_feed) {
+      // สำหรับ Roll_1 ที่เป็นวัตถุเดี่ยว ใช้สูตรเดิมที่ล็อกตำแหน่งได้แม่นยำที่สุด
+      obj.geometry.computeBoundingBox();
+      const localCenter = new THREE.Vector3();
+      obj.geometry.boundingBox.getCenter(localCenter);
+      obj.geometry.center(); 
+      obj.updateMatrixWorld(true);
+      localCenter.applyMatrix4(obj.matrixWorld);
+      obj.position.copy(localCenter);
+      reg('roller_feed', obj);
+    } 
+    else if (obj.name === PART_NAMES.feeder_block) {
+      // 🌟 🌟 ปลดล็อกบั๊ก Feed_Cerrier ค้าง/ตำแหน่งเบี้ยว:
+      // เราเจาะจงค้นหาชิ้น Mesh จริงที่อยู่ข้างใน Group ของมัน เพื่อเอาชิ้นข้างในนั้นมาจัดจุดศูนย์กลาง (Geometry Center) 
+      // โดยตัวโครงสร้างแม่ด้านนอกจะถูกล็อกพิกัดไว้ที่เดิมตาม Blender เป๊ะ 100% ทำให้ไม่ลอยหลุดเฟรม และหมุนได้อิสระรอบแกนตัวเอง
+      let innerMesh = null;
+      obj.traverse(child => { if(child.isMesh && !innerMesh) innerMesh = child; });
       
-      // 🛠️ 🛠️ จุดประมวลผลล็อกพิกัด 🛠️ 🛠️
-      if(role === 'roller_feed') {
-        // แก้ไข Roll_1 ที่เป็นชิ้นงานเดี่ยวโดยการรวบ Geometry เพื่อความนิ่ง
-        obj.geometry.computeBoundingBox();
-        const localCenter = new THREE.Vector3();
-        obj.geometry.boundingBox.getCenter(localCenter);
-        obj.geometry.center(); 
-        obj.updateMatrixWorld(true);
-        localCenter.applyMatrix4(obj.matrixWorld);
-        obj.position.copy(localCenter);
+      if(innerMesh && innerMesh.geometry) {
+        innerMesh.geometry.computeBoundingBox();
+        const innerCenter = new THREE.Vector3();
+        innerMesh.geometry.boundingBox.getCenter(innerCenter);
+        innerMesh.geometry.center(); // ย้ายจุดหมุนเนื้อเหล็กข้างในมาอยู่ตรงกลางเป๊ะ
+        innerMesh.position.add(innerCenter); // ล็อกชดเชยค่าเยื้องให้ล็อกตำแหน่งเข้ากรอบดั้งเดิมบนเครื่องพอดี
         
-      } else if (role === 'feeder_block') {
-        // 🌟 🌟 สำหรับ Feed_Cerrier: เราบังคับย้ายจุดศูนย์กลางของโพลีกอนภายใน (Geometry) มารวมตรงกลางก้อนวัตถุ
-        // แต่ "ห้ามดัดแปลงแก้ไขค่า position ภายนอกหลักเด็ดขาด" เพื่อให้พิกัดติดตั้งจอดตรงล็อกเดิมเป๊ะๆ ไม่เคลื่อนหลุดเฟรม 🌟 🌟
-        obj.geometry.computeBoundingBox();
-        const localCenter = new THREE.Vector3();
-        obj.geometry.boundingBox.getCenter(localCenter);
-        
-        obj.geometry.center(); // ดึงแกน Origin ท้องถิ่นมาอยู่จุดกึ่งกลางเนื้อวัตถุตัวเองเพื่อเป็นจุดหมุน
-        obj.position.add(localCenter); // เลื่อนชดเชยค่า Offset ภายใน เพื่อล็อกตำแหน่งสัมบูรณ์ไว้ที่เดิมบนแท่นเครื่อง Farm
+        reg('feeder_block', innerMesh); // ลงทะเบียนส่งมอบการควบคุม Tween หมุนรอบตัวเองไปผูกไว้กับชิ้นนี้โดยตรง
+      } else {
+        reg('feeder_block', obj);
       }
-      
-      reg(role, obj); 
     }
   });
   
@@ -369,7 +372,7 @@ window.switchMode = function(mode) {
     document.getElementById('btnModeManual').classList.add('active-mode');
     document.getElementById('btnModeAuto').classList.remove('active-mode');
     document.getElementById('speedRow').style.opacity = '0.4'; 
-    addLog('🕹️ โหมดควบคุมด้วยมือทีละฟีด (Manual Mode)', 'warn');
+    addLog('🕹️ โหมดควบคุมด้วยมือทีละสเตป (Manual Mode)', 'warn');
     if(running && stepAllowed) {
       document.getElementById('btnStep').disabled = false;
     }
@@ -379,11 +382,11 @@ window.switchMode = function(mode) {
     document.getElementById('btnModeManual').classList.remove('active-mode');
     document.getElementById('speedRow').style.opacity = '1';
     document.getElementById('btnStep').disabled = true;
-    addLog('🤖 โหมดแอนิเมชันอัตโนมัติต่อเนื่อง (Auto Mode)', 'info');
+    addLog('🤖 โหมดอัตโนมัติ (Auto Mode)', 'info');
     if(running && stepAllowed) {
       stepAllowed = false;
       document.getElementById('btnStep').disabled = true;
-      advance('auto');
+      triggerNextTransition();
     }
   }
 }
@@ -416,14 +419,23 @@ function setState(id){
     if (isManualMode) {
       stepAllowed = true;
       document.getElementById('btnStep').disabled = false;
-      addLog(`[Ready] จังหวะฟีดรอบนี้เสร็จแล้ว กดปุ่ม Step เพื่อฟีดสายพานรอบถัดไป...`, 'warn');
+      addLog(`[Ready] สเตท ${id} ทำงานเสร็จแล้ว กดปุ่ม Step เพื่อไปต่อ...`, 'warn');
     } else {
-      advance('auto');
+      triggerNextTransition();
     }
   }, ms(id));
 }
 
-function triggerNextTransition() { advance('auto'); }
+function triggerNextTransition() {
+  const tr = TR[current]; if(!tr) return;
+  if(tr.auto){
+    advance('auto');
+  } else {
+    const prob = PROB[current] ?? 0.9;
+    const result = Math.random() < prob ? 'OK' : 'NG';
+    timer = setTimeout(() => advance(result), 100);
+  }
+}
 
 function advance(sig){
   if(!running) return;
@@ -437,7 +449,7 @@ window.fsmStep = function() {
   if(!running || !isManualMode || !stepAllowed) return;
   stepAllowed = false;
   document.getElementById('btnStep').disabled = true; 
-  advance('auto');
+  triggerNextTransition();
 }
 
 window.fsmStart = function(){
@@ -471,6 +483,7 @@ window.fsmReset = function(){
   document.getElementById('hstatus').textContent='Idle';
   document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','visited'));
   document.getElementById('ovState').textContent='READY';
+  document.getElementById('ovState').className='ov-state';
   document.getElementById('ovDesc').textContent='Waiting for Start';
   current='READY'; addLog('↺ Reset ระบบกลับจุดเริ่มต้น เรียบร้อย','warn');
 };
