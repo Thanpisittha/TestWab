@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Guaranteed Fixed Pivot Rotation)</title>
+  <title>BK05 — Digital Twin (Group Mesh Pivot Fixed)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -138,7 +138,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบกึ่งกลางตัวเองอยู่กับที่นิ่งสนิท'}, 
+  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบแกนตัวเองอยู่กับที่'}, 
 ];
 
 const TR = {
@@ -224,23 +224,6 @@ function twRot(role,deltaRot,durSec,axis='x',onDone=null){
   document.getElementById('animTag').style.display='block';
 }
 
-// 🌟 ระบบเพิ่มแอนิเมชันล็อกพิกัดทับค่าคงที่ บังคับให้หมุนเฉพาะองศารอบแกนโลกแนวราบขนาน Roll_1
-function twStrictFixedAxisRot(role, deltaRot, durSec) {
-  const mesh = meshMap[role]; if(!mesh) return;
-  const key = role+'_strict_axis_r';
-  const i = tweens.findIndex(t=>t.role===key); if(i>-1) tweens.splice(i,1);
-
-  tweens.push({
-    role: key,
-    mesh,
-    isStrictRot: true,
-    totalAngle: deltaRot,
-    dur: durSec,
-    elapsed: 0
-  });
-  document.getElementById('animTag').style.display='block';
-}
-
 function ret(role,durSec=0.18){
   const mesh=meshMap[role]; if(!mesh||!origPos[role]) return;
   const i=tweens.findIndex(t=>t.role===role); if(i>-1) tweens.splice(i,1);
@@ -263,14 +246,15 @@ function playAnim(id){
 
   switch(id){
     case 'INDEX':
-      // 1. Cerrier เลื่อนหน้าพุ่งตรงไปตามพิกัดรางเดิม (แกน Z)
+      // 1. Cerrier เลื่อนหน้าตามแนวราง (แกน Z)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 หมุนรอบแกนตัวเองอยู่กับที่ตรงพิกัดเดิมเป๊ะ (แกน X ท้องถิ่น)
+      // 2. Roll_1 หมุนรอบแกนตัวเองแนวราบ (แกน X ท้องถิ่น)
       twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. 🌟 Feed_Cerrier สั่งแอนิเมชันชุดล็อกตำแหน่งตายตัว สั่งหมุนรอบตัวเองแนวราบขนาน Roll_1
-      twStrictFixedAxisRot('feeder_block', Math.PI * 0.5, 0.6/S);
+      // 3. 🌟 Feed_Cerrier สั่งหมุนรอบแกน X ท้องถิ่นของตัวเองเป๊ะๆ แล้วครับนิว!
+      // เนื่องจากเราใช้สูตรคำนวณย้ายจุดศูนย์กลางลูกข่ายยกแผงแล้ว มันจะหมุนนิ่งอยู่กับที่เหมือน Roll_1 เลยครับ
+      twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'x');
       break;
 
     case 'INIT':
@@ -289,23 +273,7 @@ function animate(){
     const t=tweens[i]; t.elapsed+=dt;
     const p=Math.min(t.elapsed/t.dur,1), ep=ease(p);
     
-    if(t.isStrictRot) {
-      // 🌟 🌟 🌟 บล็อกสมการตรึงพิกัดสัมบูรณ์ร้อยเปอร์เซ็นต์ 🌟 🌟 🌟
-      const currentProgress = ep;
-      const lastProgress = ease(Math.min((t.elapsed - dt)/t.dur, 1));
-      const deltaAngle = t.totalAngle * (currentProgress - lastProgress);
-      
-      // 1. บังคับล็อกทับพิกัด Position หลักของ Group ให้เท่ากับค่าดั้งเดิมจาก Blender เสมอ!! ป้องกันการไหลเบี้ยว
-      if(origPos[ 'feeder_block' ]) {
-        t.mesh.position.copy(origPos[ 'feeder_block' ]);
-      }
-      
-      // 2. สั่งหมุนกลิ้งเฉพาะค่าเวกเตอร์องศาขนานแกน X ของโลก (World X Axis) ทิศทางเดียวกับ Roll_1
-      // ชิ้นงานจะหมุนกลมบล็อกอยู่กับแกนเหล็กกลางตัวเองเป๊ะๆ ทรงไม่เบี้ยว และจอดนิ่งสนิทร้อยเปอร์เซ็นต์ครับนิว
-      const axisWorld = new THREE.Vector3(1, 0, 0);
-      t.mesh.rotateOnWorldAxis(axisWorld, deltaAngle);
-    }
-    else if(t.isRot) {
+    if(t.isRot) {
       t.mesh.rotation[t.rotAxis||'x'] = t.fromRot + (t.toRot - t.fromRot) * ep;
     }
     else {
@@ -319,7 +287,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และจัดพิกัดจุดติดตั้งแท้ 100% ──
+// ── โหลดโมเดลและจัดการลูปขยับจุดหมุน (Geometry Pivot Center) ยกกลุ่ม ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -340,6 +308,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.update();
   
   model.traverse(obj => {
+    // ดึงชิ้นส่วนสแกนหาตัวแปร
     if (obj.name === PART_NAMES.carrier_tape) {
       reg('carrier_tape', obj);
     } 
@@ -354,9 +323,31 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('roller_feed', obj);
     } 
     else if (obj.name === PART_NAMES.feeder_block) {
-      // 🛠️ ตรึงบอดี้ Feed_Cerrier คืนค่าพิกัดดั้งเดิมจาก Blender แบบบริสุทธิ์ 100%
-      // ไม่ดัดแปลง Geometry และไม่ย้ายพิกัดหลัก เพื่อให้รูปลักษณ์ภายนอกตรงกรอบ และสั่งจำค่าตำแหน่งเข้าสู่ฐานระบบควบคุม
-      reg('feeder_block', obj); 
+      // 🛠️ 🛠️ 🛠️ สูตรแกะระบบคุมกลุ่ม Group ของ Feed_Cerrier 🛠️ 🛠️ 🛠️
+      
+      // 1. ตวงหาจุดศูนย์กลางที่แท้จริงของกล่องโมเดลภาพรวมทั้งหมด (Bounding Box Center)
+      const groupBox = new THREE.Box3().setFromObject(obj);
+      const groupCenter = new THREE.Vector3();
+      groupBox.getCenter(groupCenter);
+      
+      // 2. 🌟 ใช้ For-Loop ขยับจุดหมุน (Geometry Center) ของชิ้นส่วนย่อยข้างในทุกๆ ชิ้นพร้อมกัน ทรงจะได้ไม่เบี้ยว!
+      obj.traverse(child => {
+        if(child.isMesh && child.geometry) {
+          child.geometry.computeBoundingBox();
+          const childLocalCenter = new THREE.Vector3();
+          child.geometry.boundingBox.getCenter(childLocalCenter);
+          
+          child.geometry.center(); // บีบจุดหมุนชิ้นย่อยมาตรงกลาง
+          child.position.add(childLocalCenter); // ล็อกพิกัดประกอบภายในไว้ที่เดิมไม่ให้กระจายหลุดเฟรม
+        }
+      });
+      
+      // 3. ย้ายตำแหน่งของ Group แม่ (พิกัดหลักภายนอก) ไปประกบไว้ที่เดิมเป๊ะๆ แบบเดียวกับล้อแดง Roll_1 ครับ
+      obj.updateMatrixWorld(true);
+      const localTarget = obj.parent ? obj.parent.worldToLocal(groupCenter.clone()) : groupCenter;
+      obj.position.copy(localTarget);
+      
+      reg('feeder_block', obj); // ลงทะเบียนรันระบบแอนิเมชันสมบูรณ์
     }
   });
   
