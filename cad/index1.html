@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Instant Delete Carrier Loop)</title>
+  <title>BK05 — Digital Twin (Sectional Clipping Curve Loop)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -140,7 +140,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'Rolls หมุน | Sealing กด-ยก | Cerrier เลย Roll_1,2 แล้วลบหายไปทันที'}, 
+  {id:'INDEX',      action:'Rolls หมุนตามเข็ม | Sealing กด-ยก | Cerrier วิ่งทะลุผ่าน Roll_2 แล้วขาดหายไปเฉพาะส่วน'}, 
 ];
 
 const TR = {
@@ -160,6 +160,9 @@ const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
+// 🌟 สั่งเปิดใช้งานระบบ Clipping ของ WebGL Renderer สลักสำคัญเพื่อให้ตัดขอบวัตถุได้จริง 🌟
+renderer.localClippingEnabled = true;
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x06080a);
 const camera = new THREE.PerspectiveCamera(45,1,0.01,1000);
@@ -178,7 +181,10 @@ function resize(){
 resize();
 new ResizeObserver(resize).observe(canvas.parentElement);
 
-// ── Mesh Registry ──
+// ── 🛡️ สร้างกำแพงล่องหนเฉือนชิ้นงาน (Clipping Plane Setup) ──
+// ปักแผ่นระนาบสมมติชี้สวนทางแกน Z กลับหลัง (-1) เพื่อซ่อนเนื้อวัตถุส่วนที่ล้ำพ้นหน้าเส้นออกไป
+const localPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
+
 const meshMap={}, origPos={}, origMat={};
 function reg(role,mesh){
   meshMap[role]=mesh;
@@ -217,7 +223,6 @@ function restoreAll(){
   Object.keys(meshMap).forEach(r=>{
     const m=meshMap[r];
     if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
-    if(m) m.visible = true; // เปิดการแสดงผลปกติ
   });
 }
 
@@ -228,21 +233,21 @@ function playAnim(id){
 
   switch(id){
     case 'INDEX':
-      // 1. Cerrier เลื่อนหน้าตามแนวรางแกน Z
-      tw('carrier_tape', new THREE.Vector3(0, 0, 2), 0.6/S);  
+      // 1. Cerrier เลื่อนหน้าตามแนวรางแกน Z 
+      tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
       // 2. Roll_1 หมุนตามเข็มนาฬิกา
       twRot('roller_feed', -Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. Feed_Cerrier หมุนรอบแกน Z ตามเข็มนาฬิกา
+      // 3. Feed_Cerrier หมุนรอบแกน Z ตามเข็มนาฬิกาอยู่กับที่นิ่งสนิท
       twRot('feeder_block', -Math.PI * 0.5, 0.6/S, 'z');
 
       // 4. Roll_2 หมุนตามเข็มนาฬิกาแบบ Gear 2:1
       if (cycles % 2 === 0) {
-        twRot('roller_blue', Math.PI * 0.5, 0.6/S, 'x');
+        twRot('roller_blue', -Math.PI * 0.5, 0.6/S, 'x');
       }
 
-      // 5. Sealing หัวกดความร้อนขยับกดลงและยกขึ้น
+      // 5. Sealing หัวกดความร้อนขยับกดลงและดีดเด้งยกขึ้น
       tw('sealing_head', new THREE.Vector3(0, -0.02, 0), 0.3/S, () => {
         tw('sealing_head', new THREE.Vector3(0, 0.02, 0), 0.3/S);
       });
@@ -270,23 +275,14 @@ function animate(){
     if(p>=1){ if(t.onDone) t.onDone(); tweens.splice(i,1); }
   }
 
-  // 🌟 🌟 🌟 ระบบตรวจจับพิกัดเพื่อลบ Cerrier ทันที (Instant Delete Loop) 🌟 🌟 🌟
+  // 🌟 🌟 🌟 ระบบรีเซ็ตตำแหน่ง Cerrier แบบลูปไร้รอยต่อ (Endless Reset Loop) 🌟 🌟 🌟
   const tapeMesh = meshMap['carrier_tape'];
   if (tapeMesh && origPos['carrier_tape']) {
     let distanceMoved = tapeMesh.position.z - origPos['carrier_tape'].z;
     
-    // 🛠️ เงื่อนไขลบวัตถุ: ถ้ารางเลื่อนหน้าจนพ้นล้อ Roll_1 และ Roll_2 (ระยะยื่นเกิน 0.38 เมตร)
-    // สั่งลบหายไปทันทีด้วย visible = false (ตัดบั๊กภาพตัดปะค้างหน้าจอ)
-    if (distanceMoved > 0.38) {
-      tapeMesh.visible = false;
-    } else {
-      tapeMesh.visible = true;
-    }
-
-    // เมื่อแอนิเมชัน INDEX เลื่อนไปจนสุดสเตป (0.6 เมตร) ให้วาร์ปกลับเงียบ ๆ และเปิด visible คืนมา
+    // เมื่อสายพานไหลสะสมไปยาวได้จังหวะรอบฟีด (เกินระยะ 0.6 เมตร) ให้วาร์ปกลับจุดสตาร์ทฝั่งซ้ายเงียบๆ
     if (distanceMoved > 0.59) {
       tapeMesh.position.copy(origPos['carrier_tape']);
-      tapeMesh.visible = true;
       
       const tIdx = tweens.findIndex(t => t.role === 'carrier_tape');
       if (tIdx > -1) {
@@ -302,7 +298,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb ──
+// ── โหลดไฟล์โมเดล Run.glb และยิงระนาบตัดหน้าชิ้นงาน ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene; scene.add(model);
   model.traverse(obj => { if(obj.isMesh) { obj.castShadow = obj.receiveShadow = true; } });
@@ -314,16 +310,14 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.target.copy(center); controls.update();
   
   let feederGroup = null;
+  let blueRollPos = new THREE.Vector3(); // ล็อกเป้าหาพิกัดล้อน้ำเงิน Roll_2
+  
   model.traverse(obj => {
-    if (obj.name === PART_NAMES.carrier_tape) reg('carrier_tape', obj);
-    else if (obj.name === PART_NAMES.sealing_head) reg('sealing_head', obj);
-    else if (obj.name === PART_NAMES.roller_feed) {
-      obj.geometry.computeBoundingBox();
-      const localCenter = new THREE.Vector3(); obj.geometry.boundingBox.getCenter(localCenter);
-      obj.geometry.center(); obj.updateMatrixWorld(true); localCenter.applyMatrix4(obj.matrixWorld);
-      obj.position.copy(localCenter); reg('roller_feed', obj);
-    } 
-    else if (obj.name === PART_NAMES.roller_blue) {
+    if (obj.name === PART_NAMES.roller_blue) {
+      // คํานวณหาตำแหน่งแกนกลางสัมบูรณ์ของล้อน้ำเงิน Roll_2 บนเครื่องจักรจริง
+      obj.updateMatrixWorld(true);
+      blueRollPos.setFromMatrixPosition(obj.matrixWorld);
+      
       if(obj.isMesh) {
         obj.geometry.computeBoundingBox();
         const blueCenter = new THREE.Vector3(); obj.geometry.boundingBox.getCenter(blueCenter);
@@ -331,6 +325,32 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
         obj.position.copy(blueCenter); reg('roller_blue', obj);
       } else { reg('roller_blue', obj); }
     }
+  });
+
+  // 🛠️ 🛠️ 🛠️ จุดติดตั้งกำแพงล่องหนหน้า Roll_2 🛠️ 🛠️ 🛠️
+  // นำค่าพิกัดแกน Z จริงของล้อน้ำเงิน มาตั้งเป็นค่าคงที่จำกัดขอบเขตของแผ่นระนาบ Clipping
+  // ปล. เติมระยะ Offset ชดเชยรัศมีล้อเพิ่มเล็กน้อย (+0.12) เพื่อให้ขาดหายลับหน้าขอบล้อพอดีเป๊ะสวยงามครับ
+  localPlane.constant = (blueRollPos.z + 0.12);
+
+  model.traverse(obj => {
+    if (obj.name === PART_NAMES.carrier_tape) {
+      // 🌟 บังคับเจาะชิ้นส่วนวัสดุ (Material) ของรางเทป Cerrier ทะลวงลงไปถึงลูกข่ายย่อย
+      // เพื่อฝังระนาบแผ่นตัดหน้า localPlane เข้าสู่คำสั่งประมวลผล GPU ของชิ้นงานนี้
+      obj.traverse(child => {
+        if (child.isMesh && child.material) {
+          child.material = child.material.clone(); // Clone หลีกเลี่ยงผลกระทบโครงสร้างอื่น
+          child.material.clippingPlanes = [ localPlane ]; // มอบหมายคำสั่งเฉือนเนื้อเฉพาะส่วนที่ล้ำหน้าเส้นกำแพงล่องหน
+        }
+      });
+      reg('carrier_tape', obj);
+    }
+    else if (obj.name === PART_NAMES.sealing_head) reg('sealing_head', obj);
+    else if (obj.name === PART_NAMES.roller_feed) {
+      obj.geometry.computeBoundingBox();
+      const localCenter = new THREE.Vector3(); obj.geometry.boundingBox.getCenter(localCenter);
+      obj.geometry.center(); obj.updateMatrixWorld(true); localCenter.applyMatrix4(obj.matrixWorld);
+      obj.position.copy(localCenter); reg('roller_feed', obj);
+    } 
     else if (obj.name === PART_NAMES.feeder_block) feederGroup = obj;
   });
   
@@ -347,7 +367,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('feeder_block', innerMesh); 
     } else { reg('feeder_block', feederGroup); }
   }
-  addLog(`System Ready — Instant Delete Carrier Mechanism Active`,'info');
+  addLog(`System Core Setup Complete — Local Sectional Clipping Active`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
 // ── UI & Engine Logic ──
