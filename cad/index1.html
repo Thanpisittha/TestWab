@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Perfect 3-Core Simplified Fixed)</title>
+  <title>BK05 — Digital Twin (Corrected Feed_Cerrier Rotation Axis)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -136,9 +136,9 @@ const PART_NAMES = {
 };
 
 const STATES = [
-  {id:'INIT',        action:'Initialize System'},
-  {id:'READY',       action:'Waiting for Start'},
-  {id:'INDEX',       action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบตัวเอง'}, 
+  {id:'INIT',       action:'Initialize System'},
+  {id:'READY',      action:'Waiting for Start'},
+  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบแกนตัวเอง'}, 
 ];
 
 const TR = {
@@ -246,14 +246,15 @@ function playAnim(id){
 
   switch(id){
     case 'INDEX':
-      // 1. Cerrier เลื่อนพุ่งหน้าตามราง (แกน Z) ระยะสะสมต่อเนื่องตรงเป๊ะ
+      // 1. Cerrier เลื่อนหน้าตามราง (แกน Z)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 หมุนรอบตัวเองอยู่กับพิกัดเครื่องเดิมเป๊ะ (แกน X ท้องถิ่น)
+      // 2. Roll_1 หมุนรอบแกนแนวนอนของตัวเอง (แกน X)
       twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. 🌟 Feed_Cerrier สั่งแอนิเมชันหมุนรอบแกนตัวเอง โดยตำแหน่งจะล็อกนิ่งอยู่ตำแหน่ง Blender เดิมเป๊ะไม่เคลื่อนที่ลอยหาย!
-      twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'x');
+      // 3. 🌟 Feed_Cerrier แก้ไขแกนหมุนจาก 'x' เป็น 'y' (แกนแนวตั้งรอบตัวเอง) 
+      // เพื่อให้หมุนคล้ายจานหมุน/ม้วนเทปตามลักษณะการติดตั้งจริงในรูป ไม่ตะแคงคว่ำแล้วครับ
+      twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'y');
       break;
 
     case 'INIT':
@@ -282,7 +283,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และแก้ไขลอจิกคํานวณย้าย Pivot แบบเน้นความเสถียรของพิกัดติดตั้ง ──
+// ── โหลดไฟล์โมเดล Run.glb และจัด Pivot ชิ้นส่วน ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -302,13 +303,11 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.target.copy(center);
   controls.update();
   
-  // 🌟 🌟 ปลดล็อกลูปสแกนหาวัตถุ: อนุญาตให้ดึงได้หมดไม่ว่าจะเป็น Group หรือ Mesh ทำให้ระบบไม่ขัดข้อง 🌟 🌟
   model.traverse(obj => {
     if (obj.name === PART_NAMES.carrier_tape) {
       reg('carrier_tape', obj);
     } 
     else if (obj.name === PART_NAMES.roller_feed) {
-      // สำหรับ Roll_1 ที่เป็นวัตถุเดี่ยว ใช้สูตรเดิมที่ล็อกตำแหน่งได้แม่นยำที่สุด
       obj.geometry.computeBoundingBox();
       const localCenter = new THREE.Vector3();
       obj.geometry.boundingBox.getCenter(localCenter);
@@ -319,9 +318,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('roller_feed', obj);
     } 
     else if (obj.name === PART_NAMES.feeder_block) {
-      // 🌟 🌟 ปลดล็อกบั๊ก Feed_Cerrier ค้าง/ตำแหน่งเบี้ยว:
-      // เราเจาะจงค้นหาชิ้น Mesh จริงที่อยู่ข้างใน Group ของมัน เพื่อเอาชิ้นข้างในนั้นมาจัดจุดศูนย์กลาง (Geometry Center) 
-      // โดยตัวโครงสร้างแม่ด้านนอกจะถูกล็อกพิกัดไว้ที่เดิมตาม Blender เป๊ะ 100% ทำให้ไม่ลอยหลุดเฟรม และหมุนได้อิสระรอบแกนตัวเอง
+      // ค้นหา Mesh จริงภายใน Group เพื่อย้าย Pivot เนื้อวัตถุภายในมารอรับการหมุนรอบตัวเองที่แกน Y
       let innerMesh = null;
       obj.traverse(child => { if(child.isMesh && !innerMesh) innerMesh = child; });
       
@@ -329,10 +326,10 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
         innerMesh.geometry.computeBoundingBox();
         const innerCenter = new THREE.Vector3();
         innerMesh.geometry.boundingBox.getCenter(innerCenter);
-        innerMesh.geometry.center(); // ย้ายจุดหมุนเนื้อเหล็กข้างในมาอยู่ตรงกลางเป๊ะ
-        innerMesh.position.add(innerCenter); // ล็อกชดเชยค่าเยื้องให้ล็อกตำแหน่งเข้ากรอบดั้งเดิมบนเครื่องพอดี
+        innerMesh.geometry.center(); 
+        innerMesh.position.add(innerCenter); 
         
-        reg('feeder_block', innerMesh); // ลงทะเบียนส่งมอบการควบคุม Tween หมุนรอบตัวเองไปผูกไว้กับชิ้นนี้โดยตรง
+        reg('feeder_block', innerMesh); 
       } else {
         reg('feeder_block', obj);
       }
@@ -430,10 +427,6 @@ function triggerNextTransition() {
   const tr = TR[current]; if(!tr) return;
   if(tr.auto){
     advance('auto');
-  } else {
-    const prob = PROB[current] ?? 0.9;
-    const result = Math.random() < prob ? 'OK' : 'NG';
-    timer = setTimeout(() => advance(result), 100);
   }
 }
 
