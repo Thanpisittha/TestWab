@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Semi-Automatic Inspection Logic)</title>
+  <title>BK05 — Digital Twin (Auto & Semi-Auto OK/NG System)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -38,17 +38,18 @@
     .panel{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
     .ctrl{padding:14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
     .btn-row{display:flex;gap:6px}
-    .btn{flex:1;padding:9px;border:1px solid var(--border);border-radius:7px;font-size:11px;
+    .btn{flex:1;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:11px;
       font-weight:600;cursor:pointer;background:var(--surface2);color:var(--text);transition:all .2s}
     .btn:hover{border-color:var(--teal);color:var(--text)}
     .btn.primary{background:rgba(0,201,167,.12);color:var(--teal);border-color:var(--teal)}
     .btn.danger{background:rgba(248,113,113,.12);color:var(--red);border-color:var(--red)}
-    .btn.pass{background:rgba(0,201,167,0.25);color:var(--teal);border-color:var(--teal);font-size:12px}
-    .btn.pass:hover{background:var(--teal);color:#000}
-    .btn.fail{background:rgba(248,113,113,0.25);color:var(--red);border-color:var(--red);font-size:12px}
-    .btn.fail:hover{background:var(--red);color:#000}
+    .btn.active-mode{background:var(--teal);color:#000;border-color:var(--teal)}
+    .btn.ok-btn{background:rgba(0,201,167,0.2);color:var(--teal);border-color:var(--teal);font-size:12px}
+    .btn.ok-btn:hover{background:var(--teal);color:#000}
+    .btn.ng-btn{background:rgba(248,113,113,0.2);color:var(--red);border-color:var(--red);font-size:12px}
+    .btn.ng-btn:hover{background:var(--red);color:#000}
     .btn:disabled{opacity:.15;cursor:not-allowed;pointer-events:none}
-    .speed-row{display:flex;align-items:center;gap:8px;margin-top:2px}
+    .speed-row{display:flex;align-items:center;gap:8px}
     .slbl{font-size:11px;color:var(--muted);white-space:nowrap}
     input[type=range]{flex:1;accent-color:var(--teal)}
     .sval{font-size:11px;color:var(--teal);min-width:22px;text-align:right}
@@ -83,9 +84,9 @@
 </head>
 <body>
 <header>
-  <span class="logo">Demo</span>
+  <span class="logo">BK05</span>
   <span style="color:var(--border)">|</span>
-  <span class="htitle">SMD Reel Packing — Semi-Automatic Inspection System</span>
+  <span class="htitle">SMD Reel Packing — Dual Mode Control Dashboard</span>
   <div class="hdot" id="hdot"></div>
   <span id="hstatus">Idle</span>
 </header>
@@ -102,15 +103,20 @@
 
 <div class="panel">
   <div class="ctrl">
-    <div class="btn-row">
-      <button class="btn primary" id="btnStart" onclick="fsmStart()">▶ Start Machine</button>
-      <button class="btn danger" id="btnReset" onclick="fsmReset()" disabled>↺ Reset System</button>
+    <div class="btn-row" style="margin-bottom: 2px;">
+      <button class="btn active-mode" id="btnModeAuto" onclick="switchMode('auto')">🤖 Auto</button>
+      <button class="btn" id="btnModeSemi" onclick="switchMode('semi')">🕹️ Semi-Auto</button>
     </div>
     
-    <div class="sec-title" style="padding:4px 0 2px 0; font-size:9px">Inspection Human-Decision</div>
     <div class="btn-row">
-      <button class="btn pass" id="btnPass" onclick="fsmDecision(true)" disabled>PASS ➡️ (ผ่าน)</button>
-      <button class="btn fail" id="btnFail" onclick="fsmDecision(false)" disabled>FAIL ❌ (ไม่ผ่าน)</button>
+      <button class="btn primary" id="btnStart" onclick="fsmStart()">▶ Start</button>
+      <button class="btn danger" id="btnReset" onclick="fsmReset()" disabled>↺ Reset</button>
+    </div>
+    
+    <div class="sec-title" style="padding:4px 0 2px 0; font-size:9px">Inspection Human-Decision (Semi-Auto)</div>
+    <div class="btn-row">
+      <button class="btn ok-btn" id="btnOK" onclick="fsmDecision(true)" disabled>👍 OK</button>
+      <button class="btn ng-btn" id="btnNG" onclick="fsmDecision(false)" disabled>👎 NG</button>
     </div>
 
     <div class="speed-row">
@@ -125,7 +131,7 @@
     <div class="cnt"><div class="cnt-val" id="cCycles">0</div><div class="cnt-lbl">Feeds (Cycles)</div></div>
   </div>
   
-  <div class="sec-title">FSM Flow (Semi-Automatic Inspection)</div>
+  <div class="sec-title">FSM Flow States</div>
   <div class="states" id="statesList"></div>
   
   <div class="log-wrap">
@@ -150,7 +156,6 @@ const PART_NAMES = {
   sealing_head: 'Sealing', 
 };
 
-// กำหนดรายละเอียดสเตตและระบุประเภทสเตต (isCheck: true คือจุดตรวจสอบที่ต้องกด PASS/FAIL)
 const STATES = [
   {id:'INIT',          action:'โหลด Carrier & Cover Tape', isCheck:false},
   {id:'READY',         action:'Power ON / ระบบพร้อมรัน', isCheck:false},
@@ -194,7 +199,7 @@ const DUR = {
 window.speedMul = 1;
 const ms = id => (DUR[id]||500) / speedMul;
 
-// ── Three.js Setup ──
+// ── Three.js Engine Setup ──
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -226,7 +231,7 @@ function reg(role,mesh){
   mesh._origRot = mesh.rotation.clone(); 
 }
 
-// ── Tween ──
+// ── Tween System ──
 const tweens=[];
 function twCustomKey(roleKey,targetMesh,fromPos,toPos,durSec,onDone=null){
   const i=tweens.findIndex(t=>t.role===roleKey); if(i>-1) tweens.splice(i,1);
@@ -249,7 +254,14 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// ── 🎬 Animation System ──
+function restoreAll(){
+  Object.keys(meshMap).forEach(r=>{
+    const m=meshMap[r];
+    if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
+  });
+}
+
+// ── 🎬 Animation Mapping ──
 function playAnim(id){
   const S = speedMul;
   const sealMesh = meshMap['sealing_head'];
@@ -262,7 +274,7 @@ function playAnim(id){
 
       if(tapeMesh && origPos['carrier_tape']) {
         tapeMesh.position.copy(origPos['carrier_tape']);
-        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0, 0, 2));
+        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0, 0, 0.2));
         twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 1.0/S, () => {
           tapeMesh.position.copy(origPos['carrier_tape']);
         });
@@ -271,7 +283,7 @@ function playAnim(id){
 
     case 'SEAL_DOWN':
       if(sealMesh && origPos['sealing_head']){
-        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.5, 0));
+        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.05, 0));
         twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 1.0/S);
       }
       break;
@@ -318,7 +330,7 @@ function animate(){
 }
 animate();
 
-// ── Load Model GLB ──
+// ── Load Model ──
 new GLTFLoader().load('./export/Machine.glb', gltf=>{
   const model = gltf.scene; scene.add(model);
   model.traverse(obj => { if(obj.isMesh) obj.castShadow = obj.receiveShadow = true; });
@@ -363,14 +375,14 @@ new GLTFLoader().load('./export/Machine.glb', gltf=>{
       reg('feeder_block', innerMesh); 
     } else { reg('feeder_block', feederGroup); }
   }
-  addLog(`Semi-Auto Monitoring System Online`,'info');
+  addLog(`System Core Loaded Successfully`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
-// ── UI Render List ──
+// ── UI & Engine Logic ──
 const sl=document.getElementById('statesList');
 STATES.forEach(s=>{
   const el=document.createElement('div'); el.className='si'; el.id='si_'+s.id;
-  el.innerHTML=`<div class="si-dot"></div><span class="si-name">${s.id}</span><span class="si-action" title="${s.action}">${s.action}</span>`;
+  el.innerHTML=`<div class="si-dot"></div><span class="si-name">${s.id}</span><span class="si-action">${s.action}</span>`;
   sl.appendChild(el);
 });
 
@@ -381,88 +393,53 @@ function addLog(msg,type='info'){
   b.appendChild(el); b.scrollTop=b.scrollHeight;
 }
 
-// ── Core Engine Logic ──
-let current='READY', running=false, timer=null, cycles=0;
-let isInspectingPhase = false; // ตัวแปรเช็คว่าระบบกำลังหยุดรอนิวตัดสินใจหรือไม่
+// ── ระบบคุมกลไก FSM Control Engine ──
+let current='READY', running=false, timer=null, isManualMode = false, stepAllowed = false, cycles=0;
+
+window.switchMode = function(mode) {
+  isManualMode = (mode === 'manual');
+  document.getElementById('btnModeManual').classList.toggle('active-mode', isManualMode);
+  document.getElementById('btnModeAuto').classList.toggle('active-mode', !isManualMode);
+  document.getElementById('speedRow').style.opacity = isManualMode ? '0.4' : '1';
+  
+  // ปรับการเปิด/ปิดปุ่มควบคุม Step ทันทีเมื่อสลับโหมดควบคุม
+  document.getElementById('btnStep').disabled = !(running && isManualMode && stepAllowed);
+  addLog(isManualMode ? '🕹️ Manual Mode (กด Step เพื่อขยับทีละบล็อกเงื่อนไข)' : '🤖 Auto Mode', isManualMode ? 'warn' : 'info');
+  
+  if(!isManualMode && running && stepAllowed) {
+    stepAllowed = false;
+    document.getElementById('btnStep').disabled = true;
+    triggerNextTransition();
+  }
+}
 
 function setState(id){
-  // ล้างคลาสเก่าของ UI
-  document.querySelectorAll('.si.active').forEach(e=>{ e.classList.remove('active','inspecting'); e.classList.add('visited'); });
+  document.querySelectorAll('.si.active').forEach(e=>{ e.classList.remove('active'); e.classList.add('visited'); });
   current=id;
-  
-  const el=document.getElementById('si_'+id); 
+  const el=document.getElementById('si_'+id); if(el){el.classList.remove('visited'); el.classList.add('active');}
   const s=STATES.find(x=>x.id===id);
-  
-  // จัดพฤติกรรม UI บอร์ดหลักตามชนิดของสเตต
-  if(el){
-    el.classList.remove('visited'); 
-    el.classList.add('active');
-    if(s && s.isCheck) el.classList.add('inspecting');
-  }
-  
-  // แสดงชื่อบนบอร์ด Overlay ตัวใหญ่
-  document.getElementById('ovState').textContent = id; 
-  document.getElementById('ovDesc').textContent = s?.action || '';
-  document.getElementById('ovState').classList.toggle('inspect-mode', s?.isCheck || false);
-  
-  // อัปเดตเม็ดไฟบน Header หน้าเว็บ
+  document.getElementById('ovState').textContent=id; document.getElementById('ovDesc').textContent=s?.action||'';
   const dot=document.getElementById('hdot'), hs=document.getElementById('hstatus');
-  if(!running) {
-    dot.className = 'hdot'; hs.textContent = 'Idle';
-    document.getElementById('ovLabel').textContent = "Current State";
-  } else if (s && s.isCheck) {
-    dot.className = 'hdot inspect'; hs.textContent = 'Awaiting Human Decision...';
-    document.getElementById('ovLabel').textContent = "⚠️ AWAITING INSPECTION";
-  } else {
-    dot.className = 'hdot run'; hs.textContent = 'Running';
-    document.getElementById('ovLabel').textContent = "Current State";
-  }
-
-  // ลอจิกนับรอบเครื่องจักรเมื่อขึ้นรอบการฟีด (INDEX)
+  dot.className = running ? 'hdot run' : 'hdot'; hs.textContent = running ? 'Running' : 'Idle';
+  
+  // ซิงค์การนับรอบเมื่อก้าวผ่านสเตตป้อนสายพานหลัก
   if(id==='INDEX') { cycles++; document.getElementById('cCycles').textContent=cycles; }
   
-  // เล่นแอนิเมชันโมเดล 3D
   playAnim(id);
-  addLog('→ ' + id, 'info');
+  
+  addLog('→ '+id, 'info');
   
   if(!running) return;
 
-  // ตั้งเวลาดีเลย์การทำงานของแต่ละสเตต
   timer = setTimeout(() => {
-    if (s && s.isCheck) {
-      // 🛑 ถ้าเป็นสเตตตรวจสอบ: หยุดจ่ายงานอัตโนมัติ และเปิดระบบปลดล็อกปุ่ม PASS / FAIL ให้กดเลือก
-      isInspectingPhase = true;
-      document.getElementById('btnPass').disabled = false;
-      document.getElementById('btnFail').disabled = false;
-      addLog(`[หยุดตรวจ] ${id} ต้องการการยืนยันหน้างาน ➔ กรุณากด PASS หรือ FAIL`, 'warn');
+    if (isManualMode) {
+      stepAllowed = true;
+      document.getElementById('btnStep').disabled = false;
+      addLog(`[Ready] สเตท ${id} ทำงานเสร็จเรียบร้อย ➔ กดปุ่ม Step เพื่อไปต่อ`, 'warn');
     } else {
-      // ถ้าเป็นสเตตกลไกปกติ: เมื่อรันจบวินาทีให้ขยับสเตตถัดไปแบบอัตโนมัติทันที
       triggerNextTransition();
     }
   }, ms(id));
-}
-
-// ฟังก์ชันเมื่อมนุษย์กดปุ่มตัดสินใจ PASS หรือ FAIL
-window.fsmDecision = function(isPassed) {
-  if (!running || !isInspectingPhase) return;
-  
-  // ล็อกปุ่มกดทันทีเพื่อป้องกันการกดเบิ้ล
-  isInspectingPhase = false;
-  document.getElementById('btnPass').disabled = true;
-  document.getElementById('btnFail').disabled = true;
-  
-  if (isPassed) {
-    addLog(`✅ Inspection [${current}]: มนุษย์ประเมินผ่าน (PASS) -> เดินหน้าต่อ`, 'info');
-    triggerNextTransition();
-  } else {
-    // ❌ ถ้ากด FAIL: สั่งหยุดเครื่องทันทีเป็นกรณีฉุกเฉิน (Emergency Stop Simulation)
-    running = false;
-    clearTimeout(timer);
-    document.getElementById('hdot').className = 'hdot';
-    document.getElementById('hstatus').textContent = 'STOPPED (FAIL QC)';
-    document.getElementById('ovLabel').textContent = "🚨 MACHINE CRITICAL";
-    addLog(`❌ QC ERROR ALERT [${current}]: ตรวจพบความผิดพลาดหน้างาน! สั่งหยุดการทำงานทันที`, 'err');
-  }
 }
 
 function triggerNextTransition() {
@@ -470,40 +447,54 @@ function triggerNextTransition() {
   if(tr.auto) { clearTimeout(timer); const next = tr.auto; if(next) setState(next); }
 }
 
+window.fsmStep = function() { 
+  if(!running || !isManualMode || !stepAllowed) return; 
+  stepAllowed = false; 
+  document.getElementById('btnStep').disabled = true; 
+  triggerNextTransition(); 
+}
+
 window.fsmStart = function(){ 
   if(running) return; 
   running=true; 
-  isInspectingPhase = false;
+  stepAllowed = false;
   setState('INIT'); 
   document.getElementById('btnStart').disabled=true; 
   document.getElementById('btnReset').disabled=false; 
 };
 
-window.fsmReset = function(){
-  clearTimeout(timer); 
-  running=false; 
-  isInspectingPhase = false; 
-  cycles=0; 
-  document.getElementById('cCycles').textContent=0;
-  tweens.length=0;
+window.fsmDecision = function(isPassed) {
+  if (!running || !isManualMode || !stepAllowed) return;
   
+  // ลอจิกพิเศษ: ลิงก์ปุ่ม OK / NG ให้ทำหน้าที่คุมสเตปทดแทนชิ้นงานในโหมดกึ่งอัตโนมัติได้อิสระ
+  stepAllowed = false;
+  document.getElementById('btnStep').disabled = true;
+  
+  if (isPassed) {
+    addLog(`✅ Inspection OK [${current}] ➔ ปล่อยผ่านรันสเตปถัดไป`, 'info');
+    triggerNextTransition();
+  } else {
+    running = false;
+    clearTimeout(timer);
+    document.getElementById('hdot').className = 'hdot';
+    document.getElementById('hstatus').textContent = 'STOPPED (NG ALERT)';
+    document.getElementById('ovLabel').textContent = "🚨 CRITICAL STOP";
+    addLog(`❌ INSPECTION NG DETECTED [${current}] ➔ ตรวจพบจุดบกพร่อง! สั่งตัดอินเตอร์ล็อกหยุดระบบทันที`, 'err');
+  }
+}
+
+window.fsmReset = function(){
+  clearTimeout(timer); running=false; stepAllowed=false; cycles=0; document.getElementById('cCycles').textContent=0;
+  tweens.length=0;
   Object.keys(meshMap).forEach(role=>{
     const m=meshMap[role]; if(m && origPos[role]){ m.position.copy(origPos[role]); if(m._origRot) m.rotation.copy(m._origRot); }
   });
-  
-  document.getElementById('btnStart').disabled=false; 
-  document.getElementById('btnPass').disabled=true; 
-  document.getElementById('btnFail').disabled=true; 
-  document.getElementById('btnReset').disabled=true;
-  
-  document.getElementById('hdot').className='hdot'; 
-  document.getElementById('hstatus').textContent='Idle';
+  document.getElementById('btnStart').disabled=false; document.getElementById('btnStep').disabled=true; document.getElementById('btnReset').disabled=true;
+  document.getElementById('btnOK').disabled=true; document.getElementById('btnNG').disabled=true;
+  document.getElementById('hdot').className='hdot'; document.getElementById('hstatus').textContent='Idle';
   document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','visited','inspecting'));
-  
-  document.getElementById('ovState').textContent='READY'; 
-  document.getElementById('ovLabel').textContent = "Current State";
-  document.getElementById('ovState').classList.remove('inspect-mode');
-  current='READY';
+  document.getElementById('ovState').textContent='READY'; document.getElementById('ovLabel').textContent = "Current State";
+  document.getElementById('ovState').classList.remove('inspect-mode'); current='READY';
 };
 </script>
 </body>
