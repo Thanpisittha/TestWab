@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Feed_Cerrier Sync)</title>
+  <title>BK05 — Digital Twin (Feed_Cerrier Group Fix)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -136,11 +136,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// ── 🛠️ เพิ่มชื่อโมเดลป้อนสายพาน Feed_Cerrier เข้าสู่สารบบจับคู่ชิ้นส่วน ──
 const PART_NAMES = {
   carrier_tape: 'Cerrier', 
   roller_feed:  'Roll_1', 
-  feeder_block: 'Feed_Cerrier', // 🌟 ผูกวัตถุป้อนสายพานจากโครงสร้างไฟล์ของนิวเข้าบอร์ดควบคุม
+  feeder_block: 'Feed_Cerrier', 
 };
 
 const STATES = [
@@ -219,6 +218,8 @@ function reg(role,mesh){
   meshMap[role]=mesh;
   origPos[role]=mesh.position.clone();
   mesh._origRot=mesh.rotation.clone(); 
+  
+  // ป้องกันการระเบิดกรณีระบุวัตถุกลุ่มที่ไม่มี Material ติดมาตรงๆ ที่ตัวแม่
   if(mesh.material) {
     origMat[role]=Array.isArray(mesh.material)?mesh.material.map(m=>m.clone()):mesh.material.clone();
   }
@@ -269,28 +270,28 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// ── Material ไฮไลท์เรืองแสงนีออน ──
-const hlMat = new THREE.MeshStandardMaterial({
-  color: 0x00ffcc,       
-  emissive: 0x00aa66,    
-  roughness: 0.1,
-  metalness: 0.1
-});
-const alMat = new THREE.MeshStandardMaterial({
-  color: 0xff3333,       
-  emissive: 0xcc0000,    
-  roughness: 0.1
-});
-
-function hl(role,mat){const m=meshMap[role];if(m){m.material=mat;}}
-function restoreAll(){
-  Object.keys(meshMap).forEach(r=>{
-    const m=meshMap[r];
-    if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
+function hl(role,mat){
+  const m=meshMap[role]; if(!m) return;
+  // บังคับเปลี่ยนสีแบบส่องทะลุเข้ากลุ่มก้อนลูกข่ายทั้งหมด (Deep Hierarchy Traverse)
+  m.traverse(child => {
+    if(child.isMesh && origMat[role]) child.material = mat;
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมลอจิกความเคลื่อนไหว (เพิ่มระบบกระตุกฟีดสายพานคู่ขนาน) ──
+function restoreAll(){
+  Object.keys(meshMap).forEach(role=>{
+    const m=meshMap[role];
+    if(m) {
+      m.traverse(child => {
+        if(child.isMesh && child.name && origMat[child.name]) {
+          child.material = origMat[child.name].clone();
+        }
+      });
+    }
+  });
+}
+
+// ── 🎬 ฟังก์ชันควบคุมลอจิกความเคลื่อนไหว ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -298,7 +299,7 @@ function playAnim(id){
   switch(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
-      hl('feeder_block', hlMat); // เปิดไฟไฮไลท์ที่บล็อกตัวฟีดด้วย
+      hl('feeder_block', hlMat); 
       
       // 1. Cerrier ขยับเลื่อนพุ่งหน้าสะสมทีละ 20 ซม. (แกน Z)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.5/S);  
@@ -306,20 +307,16 @@ function playAnim(id){
       // 2. Roll_1 หมุนรอบตัวเองอยู่กับที่เป๊ะๆ ตามระนาบล้อ แกน X
       twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'x');
       
-      // 3. 🌟 Feed_Cerrier ขยับเลื่อนไปข้างหน้า 20 ซม. พร้อมๆ กันขนานไปกับ Cerrier
+      // 3. Feed_Cerrier ขยับเลื่อนไปข้างหน้า 20 ซม. ขนานตามแนวรางแนวเดียวกันกับ Cerrier
       tw('feeder_block', new THREE.Vector3(0, 0, 0.2), 0.5/S);
       break;
 
     case 'INIT':
-      // ดึง Cerrier กลับจุดสตาร์ทเริ่มต้น (กรณีรันลูปเครื่องใหม่)
       ret('carrier_tape', 0.25/S); 
-      
-      // 🌟 ดึง Feed_Cerrier สไลด์ถอยหลังกลับไปรอที่จุดเริ่มต้นเดิม เพื่อเตรียมพร้อมกระตุกฟีดในรอบถัดไป
       ret('feeder_block', 0.20/S);
       break;
 
     case 'READY':
-      // 🌟 เสริมลอจิก: ทุกครั้งที่วนลูปกลับมาสแตนบายรอที่ READY ให้ตัวป้อนถอยกลับมารอที่จุดสตาร์ทเสมอ ชิ้นงานสายพานจะได้คาตำแหน่งสะสมไว้ตามสั่งครับ
       ret('feeder_block', 0.20/S);
       break;
 
@@ -350,7 +347,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และระบบคำนวณชดเชยจุด Pivot ของแท่นเครื่อง ──
+// ── โหลดไฟล์โมเดล Run.glb และแก้ไขปัญหาลอจิกการคัดกรอง Group Object ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -359,6 +356,10 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
     if(obj.isMesh) {
       obj.castShadow = true;
       obj.receiveShadow = true;
+      // สำรองข้อมูลวัสดุแยกตามรายชื่อชิ้นย่อยเพื่อป้องกันบั๊กไฟกะพริบเวลารีเซ็ตสี
+      if(obj.name && obj.material) {
+        origMat[obj.name] = obj.material.clone();
+      }
     }
   });
 
@@ -371,19 +372,17 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.update();
   
   model.traverse(obj=>{
-    if(!obj.isMesh) return;
+    // 🌟 จุดแก้ไขสำคัญ: ปลดล็อกคำสั่ง !obj.isMesh ออก เพื่ออนุญาตให้ดึงวัตถุประเภทกลุ่ม (Group) เช่น Feed_Cerrier เข้ามาควบคุมได้
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
-      if(role === 'roller_feed') {
+      if(role === 'roller_feed' && obj.isMesh) {
         obj.geometry.computeBoundingBox();
         const localCenter = new THREE.Vector3();
         obj.geometry.boundingBox.getCenter(localCenter);
-        
-        obj.geometry.center(); // รวบแกนหมุน Roll_1 มาไว้ตรงกลางตัวเอง
-        
+        obj.geometry.center(); 
         obj.updateMatrixWorld(true);
         localCenter.applyMatrix4(obj.matrixWorld);
-        obj.position.copy(localCenter); // ชดเชยพิกัดกลับเข้าแท่นเครื่องเดิมเป๊ะๆ
+        obj.position.copy(localCenter);
       }
       reg(role, obj); 
     }
