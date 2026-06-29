@@ -250,11 +250,11 @@ function playAnim(id){
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
       // 2. Roll_1 หมุนรอบแกนตัวเองแนวราบ (แกน X ท้องถิ่น)
-      twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
+      twRot('roller_feed', -Math.PI * 0.5, 0.6/S, 'x');
 
       // 3. 🌟 Feed_Cerrier สั่งหมุนรอบแกน X ของตัวเองตรงเป๊ะ 100% 
       // เนื่องจากระบบคัดลอกย้ายค่ายมาเกาะ Scene โลกหลักแล้ว ทิศทางจะขนานล้อแดงเป๊ะๆ ไม่เหวี่ยงอ้อมรอบตัวอื่นครับนิว
-      twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'z');
+      twRot('feeder_block', -Math.PI * 0.5, 0.6/S, 'z');
       break;
 
     case 'INIT':
