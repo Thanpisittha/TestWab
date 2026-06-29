@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Group Mesh Pivot Fixed)</title>
+  <title>BK05 — Digital Twin (Perfect Local Fixed Pivot)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -138,7 +138,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบแกนตัวเองอยู่กับที่'}, 
+  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนอยู่กับที่'}, 
 ];
 
 const TR = {
@@ -246,14 +246,13 @@ function playAnim(id){
 
   switch(id){
     case 'INDEX':
-      // 1. Cerrier เลื่อนหน้าตามแนวราง (แกน Z)
+      // 1. Cerrier เลื่อนหน้าตามรางพิกัดแกน Z
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 หมุนรอบแกนตัวเองแนวราบ (แกน X ท้องถิ่น)
+      // 2. Roll_1 หมุนรอบตัวเองแกน X
       twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. 🌟 Feed_Cerrier สั่งหมุนรอบแกน X ท้องถิ่นของตัวเองเป๊ะๆ แล้วครับนิว!
-      // เนื่องจากเราใช้สูตรคำนวณย้ายจุดศูนย์กลางลูกข่ายยกแผงแล้ว มันจะหมุนนิ่งอยู่กับที่เหมือน Roll_1 เลยครับ
+      // 3. 🌟 Feed_Cerrier สั่งหมุนรอบตัวเองที่แกน X ท้องถิ่นโดยตรง พิกัดจะนิ่ง ไม่หล่น ไม่ส่ายครับ
       twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'x');
       break;
 
@@ -287,7 +286,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดโมเดลและจัดการลูปขยับจุดหมุน (Geometry Pivot Center) ยกกลุ่ม ──
+// ── โหลดโมเดลรันพิกัดแบบบริสุทธิ์ 100% ปล่อยชิ้นส่วนลูกไว้ตามตำแหน่ง Blender ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -308,11 +307,11 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.update();
   
   model.traverse(obj => {
-    // ดึงชิ้นส่วนสแกนหาตัวแปร
     if (obj.name === PART_NAMES.carrier_tape) {
       reg('carrier_tape', obj);
     } 
     else if (obj.name === PART_NAMES.roller_feed) {
+      // สำหรับล้อเดี่ยว ใช้สูตรเดิมขยับจุดหมุนเข้าศูนย์กลาง
       obj.geometry.computeBoundingBox();
       const localCenter = new THREE.Vector3();
       obj.geometry.boundingBox.getCenter(localCenter);
@@ -323,31 +322,9 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('roller_feed', obj);
     } 
     else if (obj.name === PART_NAMES.feeder_block) {
-      // 🛠️ 🛠️ 🛠️ สูตรแกะระบบคุมกลุ่ม Group ของ Feed_Cerrier 🛠️ 🛠️ 🛠️
-      
-      // 1. ตวงหาจุดศูนย์กลางที่แท้จริงของกล่องโมเดลภาพรวมทั้งหมด (Bounding Box Center)
-      const groupBox = new THREE.Box3().setFromObject(obj);
-      const groupCenter = new THREE.Vector3();
-      groupBox.getCenter(groupCenter);
-      
-      // 2. 🌟 ใช้ For-Loop ขยับจุดหมุน (Geometry Center) ของชิ้นส่วนย่อยข้างในทุกๆ ชิ้นพร้อมกัน ทรงจะได้ไม่เบี้ยว!
-      obj.traverse(child => {
-        if(child.isMesh && child.geometry) {
-          child.geometry.computeBoundingBox();
-          const childLocalCenter = new THREE.Vector3();
-          child.geometry.boundingBox.getCenter(childLocalCenter);
-          
-          child.geometry.center(); // บีบจุดหมุนชิ้นย่อยมาตรงกลาง
-          child.position.add(childLocalCenter); // ล็อกพิกัดประกอบภายในไว้ที่เดิมไม่ให้กระจายหลุดเฟรม
-        }
-      });
-      
-      // 3. ย้ายตำแหน่งของ Group แม่ (พิกัดหลักภายนอก) ไปประกบไว้ที่เดิมเป๊ะๆ แบบเดียวกับล้อแดง Roll_1 ครับ
-      obj.updateMatrixWorld(true);
-      const localTarget = obj.parent ? obj.parent.worldToLocal(groupCenter.clone()) : groupCenter;
-      obj.position.copy(localTarget);
-      
-      reg('feeder_block', obj); // ลงทะเบียนรันระบบแอนิเมชันสมบูรณ์
+      // 🌟 🌟 🌟 สำหรับ Feed_Cerrier: ปล่อยเนื้อวัตถุไว้เฉยๆ ห้ามทำ geometry.center() 
+      // ชิ้นส่วนย่อยภายในทั้งหมดจะเกาะกลุ่มกันนิ่งสนิทตรงตำแหน่งพิกัดแท้ใน Blender 100% ไม่กระจายหลุดเฟรม
+      reg('feeder_block', obj); 
     }
   });
   
