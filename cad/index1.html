@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (2:1 Gear Ratio Synced)</title>
+  <title>BK05 — Digital Twin (5-Core Logic with Sealing Actuator)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -134,12 +134,13 @@ const PART_NAMES = {
   roller_feed:  'Roll_1', 
   feeder_block: 'Feed_Cerrier',
   roller_blue:  'Roll_2', 
+  sealing_head: 'Sealing', // 🌟 ทะเบียนดักจับชื่อหัวกดความร้อนซีลฝาเทป
 };
 
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'Roll_1: x2 | Roll_2: x1 (Synced)'}, 
+  {id:'INDEX',      action:'Roll_1,2 ฟีดหมุนตามเข็ม | Cerrier เลื่อนหน้า | Sealing กดลง-ยกขึ้น'}, 
 ];
 
 const TR = {
@@ -219,32 +220,38 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมแอนิเมชัน (Gear Sync 2:1 Logic) ──
+// ── 🎬 ฟังก์ชันควบคุมแอนิเมชัน (5-Core Controls) ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
 
   switch(id){
     case 'INDEX':
-      // 1. Cerrier เลื่อนทุกรอบ
+      // 1. Cerrier เลื่อนหน้าตามแนวรางแกน Z 
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 (ล้อแดง) หมุนตามเข็มทุกรอบ
+      // 2. Roll_1 หมุนตามเข็มนาฬิกา
       twRot('roller_feed', -Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. Feed_Cerrier (ม้วนขาวกลาง) หมุนตามเข็มทุกรอบ (แกน Z)
+      // 3. Feed_Cerrier หมุนตามเข็มนาฬิกา (แกน Z) อยู่กับที่นิ่งสนิท
       twRot('feeder_block', -Math.PI * 0.5, 0.6/S, 'z');
 
-      // 🌟 4. Roll_2 (ล้อน้ำเงิน) หมุนแบบ 2:1 Ratio
-      // เช็คตัวแปร cycles: จะหมุนเฉพาะรอบเลขคู่ (0, 2, 4...) เพื่อให้สัมพันธ์กับ Roll_1 x2
+      // 4. Roll_2 หมุนแบบเกียร์ทด 2:1 ตามเข็มนาฬิกา
       if (cycles % 2 === 0) {
         twRot('roller_blue', Math.PI * 0.5, 0.6/S, 'x');
-        addLog('⚙️ Gear Ratio Trigger: Roll_2 Rotating (1 of 2 Roll_1 steps)', 'warn');
       }
+
+      // 🌟 5. Sealing (ชุดหัวซีลความร้อน): ขยับลง 2 ซม. (แกน Y) แล้วสลับคิวยกตัวกลับคืนตำแหน่งเดิมทันที
+      // จังหวะแรก: พุ่งลงมาซีลปิดเทป ใช้เวลา 0.3 วินาที
+      tw('sealing_head', new THREE.Vector3(0, -0.02, 0), 0.3/S, () => {
+        // จังหวะสอง (Callback): ดีดเด้งยกตัวกลับคืนตำแหน่งสแตนบายด้านบนทันที ใช้เวลาอีก 0.3 วินาที
+        tw('sealing_head', new THREE.Vector3(0, 0.02, 0), 0.3/S);
+      });
       break;
 
     case 'INIT':
       ret('carrier_tape', 0.25/S); 
+      ret('sealing_head', 0.25/S); // รีเซ็ตตำแหน่งหัวกดซีลกลับจุดสตาร์ท
       break;
   }
 }
@@ -260,14 +267,14 @@ function animate(){
     const p=Math.min(t.elapsed/t.dur,1), ep=ease(p);
     if(t.isRot) t.mesh.rotation[t.rotAxis||'x'] = t.fromRot + (t.toRot - t.fromRot) * ep;
     else t.mesh.position.lerpVectors(t.from,t.to,ep);
-    if(p>=1){tweens.splice(i,1);}
+    if(p>=1){ if(t.onDone) t.onDone(); tweens.splice(i,1); }
   }
   if(tweens.length===0) document.getElementById('animTag').style.display='none';
   renderer.render(scene,camera);
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และจัดระเบียบแกน ──
+// ── โหลดไฟล์โมเดล Run.glb และจัดพิกัดเครื่องจักร ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene; scene.add(model);
   model.traverse(obj => { if(obj.isMesh) { obj.castShadow = obj.receiveShadow = true; } });
@@ -281,6 +288,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   let feederGroup = null;
   model.traverse(obj => {
     if (obj.name === PART_NAMES.carrier_tape) reg('carrier_tape', obj);
+    else if (obj.name === PART_NAMES.sealing_head) reg('sealing_head', obj); // 🌟 ผูกแกนเข้ากับชิ้นส่วนหัวซีลความร้อน
     else if (obj.name === PART_NAMES.roller_feed) {
       obj.geometry.computeBoundingBox();
       const localCenter = new THREE.Vector3(); obj.geometry.boundingBox.getCenter(localCenter);
@@ -311,7 +319,7 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('feeder_block', innerMesh); 
     } else { reg('feeder_block', feederGroup); }
   }
-  addLog(`System Synchronized — 2:1 Ratio Active`,'info');
+  addLog(`System Upgraded — Sealing Mechanism Ready`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
 // ── UI & Engine Logic ──
@@ -348,7 +356,7 @@ function setState(id){
   const dot=document.getElementById('hdot'), hs=document.getElementById('hstatus');
   dot.className = running ? 'hdot run' : 'hdot'; hs.textContent = running ? 'Running' : 'Idle';
   
-  playAnim(id); // <--- Animation check cycles internally
+  playAnim(id);
   
   addLog('→ '+id, 'info');
   if(id==='INDEX') { cycles++; document.getElementById('cCycles').textContent=cycles; }
@@ -378,6 +386,3 @@ window.fsmReset = function(){
 </script>
 </body>
 </html>
-
-
-ลองอัปโหลดไปรันได้เลยครับ ระบบจะดูสมจริงเหมือนเครื่องจักรที่มีชุดเฟืองทดรอบเลยครับ!
