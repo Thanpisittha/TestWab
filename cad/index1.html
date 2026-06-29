@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Dual Stable Roll Rotation)</title>
+  <title>BK05 — Digital Twin (3-Core Mechanism Only)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -23,7 +23,6 @@
     .htitle{font-size:12px;color:var(--muted)}
     .hdot{width:8px;height:8px;border-radius:50%;background:#4b5563;margin-left:auto;transition:background .3s}
     .hdot.run{background:var(--teal);box-shadow:0 0 6px var(--teal)}
-    .hdot.alarm{background:var(--red);box-shadow:0 0 6px var(--red)}
     #hstatus{font-size:12px;color:var(--muted);margin-left:6px}
     #canvas-wrap{position:relative;background:#06080a}
     canvas{display:block;width:100%;height:100%}
@@ -31,7 +30,6 @@
       border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:160px}
     .ov-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
     .ov-state{font-size:22px;font-weight:700;color:var(--teal);line-height:1.1;transition:color .3s}
-    .ov-state.alarm{color:var(--red)}
     .ov-desc{font-size:11px;color:var(--muted);margin-top:3px}
     .anim-tag{position:absolute;bottom:12px;left:12px;background:rgba(251,191,36,.15);
       border:1px solid var(--amber);border-radius:7px;padding:5px 12px;font-size:11px;color:var(--amber);display:none}
@@ -59,15 +57,12 @@
     .si{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;margin-bottom:2px;transition:background .2s}
     .si.active{background:rgba(0,201,167,.1)}
     .si.visited{background:rgba(255,255,255,.02)}
-    .si.alarm-s{background:rgba(248,113,113,.1)}
     .si-dot{width:7px;height:7px;border-radius:50%;background:#2a2d38;flex-shrink:0;transition:background .3s}
     .si.active .si-dot{background:var(--teal);box-shadow:0 0 5px var(--teal)}
     .si.visited .si-dot{background:var(--purple)}
-    .si.alarm-s .si-dot{background:var(--red);box-shadow:0 0 5px var(--red)}
     .si-name{font-size:11px;font-weight:600;color:var(--muted);min-width:95px;transition:color .2s}
     .si.active .si-name{color:var(--teal)}
     .si.visited .si-name{color:var(--text)}
-    .si.alarm-s .si-name{color:var(--red)}
     .si-action{font-size:10px;color:var(--muted)}
     .log-wrap{border-top:1px solid var(--border);height:145px;display:flex;flex-direction:column;flex-shrink:0}
     .log-hdr{padding:6px 14px;display:flex;justify-content:space-between;align-items:center}
@@ -75,14 +70,14 @@
     .log-body{flex:1;overflow-y:auto;padding:0 14px 8px;font-family:monospace;font-size:10px;
       line-height:1.7;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
     .le .ts{color:#4b5563;margin-right:5px}
-    .le.info .ev{color:var(--teal)}.le.warn .ev{color:var(--amber)}.le.err .ev{color:var(--red)}
+    .le.info .ev{color:var(--teal)}.le.warn .ev{color:var(--amber)}
   </style>
 </head>
 <body>
 <header>
   <span class="logo">BK05</span>
   <span style="color:var(--border)">|</span>
-  <span class="htitle">SMD Reel Packing — Digital Twin</span>
+  <span class="htitle">SMD Reel Packing — Simplified Digital Twin</span>
   <div class="hdot" id="hdot"></div>
   <span id="hstatus">Idle</span>
 </header>
@@ -116,11 +111,9 @@
     </div>
   </div>
   <div class="counters">
-    <div class="cnt"><div class="cnt-val" id="cPacked">0</div><div class="cnt-lbl">Packed</div></div>
-    <div class="cnt"><div class="cnt-val" id="cCycles">0</div><div class="cnt-lbl">Cycles</div></div>
-    <div class="cnt"><div class="cnt-val" id="cAlarm" style="color:var(--red)">0</div><div class="cnt-lbl">Alarms</div></div>
+    <div class="cnt"><div class="cnt-val" id="cCycles">0</div><div class="cnt-lbl">Feeds (Cycles)</div></div>
   </div>
-  <div class="sec-title">FSM States</div>
+  <div class="sec-title">FSM States (3 Covers)</div>
   <div class="states" id="statesList"></div>
   <div class="log-wrap">
     <div class="log-hdr">
@@ -136,55 +129,26 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// ── 🛠️ แมปชื่อระบบควบคุม: เพิ่มตัวแปรกลไกป้อนสายพาน feeder_block เข้าคู่ ──
 const PART_NAMES = {
   carrier_tape: 'Cerrier', 
   roller_feed:  'Roll_1', 
-  feeder_block: 'Feed_Cerrier', // ผูกม้วนฟีดแกนเหล็กย่อยจากในไฟล์ GLB ของนิว
+  feeder_block: 'Feed_Cerrier', 
 };
 
+// 🌟 🌟 เหลือสเตตไว้แค่นี้พอ เพื่อดูการทำงานฟีดแกนหลักทั้ง 3 ส่วน 🌟 🌟
 const STATES = [
-  {id:'INIT',        action:'Initialize'},
+  {id:'INIT',        action:'Initialize System'},
   {id:'READY',       action:'Waiting for Start'},
-  {id:'SEAL',        action:'Heat + Pressure'},
-  {id:'SEAL_CHECK',  action:'Seal OK?'},
-  {id:'INDEX',       action:'Feed Cerrier Tape'}, 
-  {id:'CHECK_INDEX', action:'Check Position'},
-  {id:'LOAD_PART',   action:'Place Component'},
-  {id:'VISION',      action:'Inspect Part'},
-  {id:'FEED_COVER',  action:'Feed Cover Tape'},
-  {id:'CHECK_TEMP',  action:'Temperature Ready?'},
-  {id:'ROLL',        action:'Wind Reel (Collect)'},
-  {id:'COUNT_CHECK', action:'Count Done?'},
-  {id:'STOP',        action:'Done → READY'},
-  {id:'ALARM',       action:'Stop Machine'},
+  {id:'INDEX',       action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุน'}, 
 ];
 
 const TR = {
   INIT:        {auto:'READY'},
-  READY:       {auto:'SEAL'},
-  SEAL:        {auto:'SEAL_CHECK'},
-  SEAL_CHECK:  {OK:'INDEX',      NG:'ALARM'},
-  INDEX:       {auto:'CHECK_INDEX'},
-  CHECK_INDEX: {OK:'LOAD_PART', NG:'ALARM'},
-  LOAD_PART:   {auto:'VISION'},
-  VISION:      {OK:'FEED_COVER',NG:'ALARM'},
-  FEED_COVER:  {auto:'CHECK_TEMP'},
-  CHECK_TEMP:  {OK:'ROLL',       NG:'CHECK_TEMP'},
-  ROLL:        {auto:'COUNT_CHECK'},
-  COUNT_CHECK: {OK:'STOP',       NG:'SEAL'},
-  STOP:        {auto:'READY'},
-  ALARM:       {auto:'INIT'},
+  READY:       {auto:'INDEX'},
+  INDEX:       {auto:'INDEX'}, // วนลูปรันสเตต INDEX ซ้ำไปเรื่อยๆ เพื่อฟีดสายต่อเนื่อง
 };
 
-const PROB = {SEAL_CHECK:0.99, CHECK_INDEX:0.99, VISION:0.99, CHECK_TEMP:0.95, COUNT_CHECK:0.15};
-
-const DUR = {
-  INIT:300, READY:500, SEAL:400, SEAL_CHECK:150,
-  INDEX:800, 
-  CHECK_INDEX:150, LOAD_PART:250, VISION:250, FEED_COVER:250, CHECK_TEMP:150,
-  ROLL:400, COUNT_CHECK:150, STOP:400, ALARM:800,
-};
+const DUR = { INIT:400, READY:600, INDEX:1000 };
 
 window.speedMul = 1;
 const ms = id => (DUR[id]||400) / speedMul;
@@ -269,17 +233,12 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// ── Material ไฮไลท์เรืองแสงนีออน ──
+// Material ไฮไลท์นีออนสีเขียวเรืองแสงตอนขยับ
 const hlMat = new THREE.MeshStandardMaterial({
   color: 0x00ffcc,       
   emissive: 0x00aa66,    
   roughness: 0.1,
   metalness: 0.1
-});
-const alMat = new THREE.MeshStandardMaterial({
-  color: 0xff3333,       
-  emissive: 0xcc0000,    
-  roughness: 0.1
 });
 
 function hl(role,mat){const m=meshMap[role];if(m){m.material=mat;}}
@@ -290,7 +249,7 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมการทำงานกลไก ──
+// ── 🎬 ฟังก์ชันควบคุมการทำงานขยับ 3 อุปกรณ์พร้อมกัน ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
@@ -298,24 +257,21 @@ function playAnim(id){
   switch(id){
     case 'INDEX':
       hl('carrier_tape', hlMat); 
+      hl('roller_feed', hlMat);
+      hl('feeder_block', hlMat);
       
-      // 1. Cerrier สไลด์พุ่งหน้าทีละ 20 ซม. สะสมพิกัดต่อเนื่อง
-      tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.5/S);  
+      // 1. Cerrier เลื่อนหน้าทีละ 20 ซม. (แกน Z)
+      tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 ทั้งก้อนหมุนรอบศูนย์กลางตัวเองเป๊ะๆ บนระนาบแกน X 
-      twRot('roller_feed', Math.PI * 0.5, 0.5/S, 'x');
+      // 2. Roll_1 หมุนรอบตัวเองอยู่กับที่ แกน X ดั้งเดิมที่ถูกต้อง
+      twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. 🌟 Feed_Cerrier สั่งให้มันหมุนรอบตัวเองอยู่กับพิกัดเครื่องไปพร้อมๆ กันในสเตตนี้เลย!
-      // Math.PI * 0.5 คือหมุนเดินหน้า 90 องศา (ตั้งค่าเริ่มต้นรันบนแกน X เหมือนล้อแดง)
-      twRot('feeder_block', Math.PI * 0.5, 0.5/S, 'x');
+      // 3. Feed_Cerrier หมุนรอบตัวเองอยู่กับที่ พิกัดล็อกเดิม แกน X ดั้งเดิมที่ถูกต้อง
+      twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'x');
       break;
 
     case 'INIT':
       ret('carrier_tape', 0.25/S); 
-      break;
-
-    case 'ALARM':
-      hl('carrier_tape', alMat);
       break;
   }
 }
@@ -340,7 +296,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และระบบคำนวณย้ายแกน Pivot อัตโนมัติคู่ขนาน ──
+// ── โหลดไฟล์โมเดล Run.glb และจัดพิกัดชดเชยค่า Pivot ที่แม่นยำ ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -364,22 +320,22 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
     if(!obj.isMesh) return;
     const role=Object.keys(PART_NAMES).find(r=>PART_NAMES[r]===obj.name);
     if(role) {
-      // 🌟 ยึดลอจิกการย้ายจุดศูนย์กลางเนื้อวัตถุ (Origin Point) และล็อกค่าตำแหน่งคืนกรอบเหล็กเดิมบนเครื่อง
+      // ชดเชยพิกัดเยื้องศูนย์ให้กับม้วนหมุนทั้งคู่ ให้ล็อกเข้าแกนเดิมเป๊ะๆ
       if(role === 'roller_feed' || role === 'feeder_block') {
         obj.geometry.computeBoundingBox();
         const localCenter = new THREE.Vector3();
         obj.geometry.boundingBox.getCenter(localCenter);
         
-        obj.geometry.center(); // ดึงแกนหมุนของทั้ง Roll_1 และ Feed_Cerrier มารวมตรงกลางก้อนตัวเองไม่ให้ส่ายแกว่ง
+        obj.geometry.center(); 
         obj.updateMatrixWorld(true);
         localCenter.applyMatrix4(obj.matrixWorld);
-        obj.position.copy(localCenter); // ล็อกชิ้นงานทั้งสองกลับเข้าพิกัดล็อกเดิมบนตัวเครื่องเป๊ะๆ ไม่ลอยหาย
+        obj.position.copy(localCenter);
       }
       reg(role, obj); 
     }
   });
   
-  addLog(`GLB loaded — จับคู่ชิ้นส่วน [${Object.keys(meshMap).join(', ')}]`,'info');
+  addLog(`GLB loaded — จับคู่ชิ้นส่วนหลักเสร็จสิ้น [${Object.keys(meshMap).join(', ')}]`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
 // ── UI Generation ──
@@ -400,11 +356,11 @@ function addLog(msg,type='info'){
   b.appendChild(el);b.scrollTop=b.scrollHeight;
 }
 
-// ── ระบบ FSM Engine ──
+// ── ระบบ FSM Engine (ปรับลูปลดหลั่นขั้นตอน) ──
 let current='READY', running=false, timer=null;
 let isManualMode = false; 
 let stepAllowed = false;   
-let packed=0, cycles=0, alarms=0;
+let cycles=0;
 
 window.switchMode = function(mode) {
   if(mode === 'manual') {
@@ -412,7 +368,7 @@ window.switchMode = function(mode) {
     document.getElementById('btnModeManual').classList.add('active-mode');
     document.getElementById('btnModeAuto').classList.remove('active-mode');
     document.getElementById('speedRow').style.opacity = '0.4'; 
-    addLog('🕹️ สลับเข้าสู่โหมดควบคุมทีละสเตป (Manual Mode)', 'warn');
+    addLog('🕹️ โหมดควบคุมด้วยมือทีละฟีด (Manual Mode)', 'warn');
     if(running && stepAllowed) {
       document.getElementById('btnStep').disabled = false;
     }
@@ -422,39 +378,36 @@ window.switchMode = function(mode) {
     document.getElementById('btnModeManual').classList.remove('active-mode');
     document.getElementById('speedRow').style.opacity = '1';
     document.getElementById('btnStep').disabled = true;
-    addLog('🤖 สลับเข้าสู่โหมดอัตโนมัติ (Auto Mode)', 'info');
+    addLog('🤖 โหมดแอนิเมชันอัตโนมัติต่อเนื่อง (Auto Mode)', 'info');
     if(running && stepAllowed) {
       stepAllowed = false;
       document.getElementById('btnStep').disabled = true;
-      triggerNextTransition();
+      advance('auto');
     }
   }
 }
 
 function setState(id){
-  document.querySelectorAll('.si.active,.si.alarm-s').forEach(e=>{
-    e.classList.remove('active','alarm-s');e.classList.add('visited');
+  document.querySelectorAll('.si.active').forEach(e=>{
+    e.classList.remove('active');e.classList.add('visited');
   });
   current=id;
   const el=document.getElementById('si_'+id);
-  if(el){el.classList.remove('visited');el.classList.add(id==='ALARM'?'alarm-s':'active');el.scrollIntoView({block:'nearest',behavior:'smooth'});}
+  if(el){el.classList.remove('visited');el.classList.add('active');}
   const s=STATES.find(x=>x.id===id);
   
   document.getElementById('ovState').textContent=id;
-  document.getElementById('ovState').className='ov-state'+(id==='ALARM'?' alarm':'');
+  document.getElementById('ovState').className='ov-state';
   document.getElementById('ovDesc').textContent=s?.action||'';
   
   const dot=document.getElementById('hdot'), hs=document.getElementById('hstatus');
   if(!running){dot.className='hdot'; hs.textContent='Idle';}
-  else if(id==='ALARM'){dot.className='hdot alarm'; hs.textContent='ALARM';}
   else{dot.className='hdot run'; hs.textContent='Running';}
   
   playAnim(id);
   
-  addLog('→ '+id+(s?' : '+s.action:''), id==='ALARM'?'err':'info');
-  if(id==='ROLL') {packed++; document.getElementById('cPacked').textContent=packed;}
-  if(id==='STOP') {cycles++; document.getElementById('cCycles').textContent=cycles;}
-  if(id==='ALARM'){alarms++; document.getElementById('cAlarm').textContent=alarms;}
+  addLog('→ '+id+(s?' : '+s.action:''), 'info');
+  if(id==='INDEX') {cycles++; document.getElementById('cCycles').textContent=cycles;}
   
   if(!running) return;
 
@@ -462,22 +415,11 @@ function setState(id){
     if (isManualMode) {
       stepAllowed = true;
       document.getElementById('btnStep').disabled = false;
-      addLog(`[Ready] สเตท ${id} ทำงานเสร็จแล้ว กดปุ่ม Step เพื่อไปต่อ...`, 'warn');
+      addLog(`[Ready] จังหวะฟีดรอบนี้เสร็จแล้ว กดปุ่ม Step เพื่อฟีดสายพานรอบถัดไป...`, 'warn');
     } else {
-      triggerNextTransition();
+      advance('auto');
     }
   }, ms(id));
-}
-
-function triggerNextTransition() {
-  const tr = TR[current]; if(!tr) return;
-  if(tr.auto){
-    advance('auto');
-  } else {
-    const prob = PROB[current] ?? 0.9;
-    const result = Math.random() < prob ? 'OK' : 'NG';
-    timer = setTimeout(() => advance(result), 100);
-  }
 }
 
 function advance(sig){
@@ -492,7 +434,7 @@ window.fsmStep = function() {
   if(!running || !isManualMode || !stepAllowed) return;
   stepAllowed = false;
   document.getElementById('btnStep').disabled = true; 
-  triggerNextTransition();
+  advance('auto');
 }
 
 window.fsmStart = function(){
@@ -506,7 +448,8 @@ window.fsmStart = function(){
 
 window.fsmReset = function(){
   clearTimeout(timer); running=false; stepAllowed=false;
-  restoreAll(); tweens.length=0;
+  restoreAll(); tweens.length=0; cycles=0;
+  document.getElementById('cCycles').textContent=0;
   
   Object.keys(meshMap).forEach(role=>{
     const m=meshMap[role];
@@ -523,11 +466,10 @@ window.fsmReset = function(){
   document.getElementById('btnReset').disabled=true;
   document.getElementById('hdot').className='hdot';
   document.getElementById('hstatus').textContent='Idle';
-  document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','visited','alarm-s'));
+  document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','visited'));
   document.getElementById('ovState').textContent='READY';
-  document.getElementById('ovState').className='ov-state';
   document.getElementById('ovDesc').textContent='Waiting for Start';
-  current='READY'; addLog('↺ Reset ระบบสถานะและทิศทางวัตถุกลับจุดเริ่มต้นที่ถูกต้องแล้ว','warn');
+  current='READY'; addLog('↺ Reset ระบบกลับจุดเริ่มต้น เรียบร้อย','warn');
 };
 </script>
 </body>
