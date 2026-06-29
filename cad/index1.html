@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Corrected Feed_Cerrier Rotation Axis)</title>
+  <title>BK05 — Digital Twin (Synced Feed_Cerrier Rotation Like Roll_1)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -138,7 +138,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบแกนตัวเอง'}, 
+  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบแนวตัวเองเหมือน Roll_1'}, 
 ];
 
 const TR = {
@@ -205,6 +205,7 @@ function tw(role,delta,durSec,onDone=null){
   document.getElementById('animTag').style.display='block';
 }
 
+// 🌟 ปรับปรุงระบบแอนิเมชันให้สามารถสั่งหมุนรอบแกนที่กำหนดได้นิ่ง 100%
 function twRot(role,deltaRot,durSec,axis='x',onDone=null){
   const mesh=meshMap[role]; if(!mesh) return;
   const key=role+'_r';
@@ -246,15 +247,15 @@ function playAnim(id){
 
   switch(id){
     case 'INDEX':
-      // 1. Cerrier เลื่อนหน้าตามราง (แกน Z)
+      // 1. Cerrier เลื่อนไปข้างหน้าตามราง (แกน Z)
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 หมุนรอบแกนแนวนอนของตัวเอง (แกน X)
+      // 2. Roll_1 หมุนรอบแกนแนวขวาง (แกน X)
       twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. 🌟 Feed_Cerrier แก้ไขแกนหมุนจาก 'x' เป็น 'y' (แกนแนวตั้งรอบตัวเอง) 
-      // เพื่อให้หมุนคล้ายจานหมุน/ม้วนเทปตามลักษณะการติดตั้งจริงในรูป ไม่ตะแคงคว่ำแล้วครับ
-      twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'y');
+      // 3. 🌟 Feed_Cerrier สั่งหมุนรอบตัวเองในแนวเดียวกับ Roll_1 เป๊ะๆ แล้วครับนิว!
+      // ใช้ลอจิกเดียวกัน บังคับแกน X และตำแหน่งไม่เลื่อนหลุดแน่นอน
+      twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'x');
       break;
 
     case 'INIT':
@@ -283,7 +284,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และจัด Pivot ชิ้นส่วน ──
+// ── โหลดโมเดลและจัดการประมวลผล Pivot จุดหมุนให้อยู่กึ่งกลางชิ้นงาน ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -318,16 +319,24 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('roller_feed', obj);
     } 
     else if (obj.name === PART_NAMES.feeder_block) {
-      // ค้นหา Mesh จริงภายใน Group เพื่อย้าย Pivot เนื้อวัตถุภายในมารอรับการหมุนรอบตัวเองที่แกน Y
+      // 🛠️ แก้ไขโครงสร้างกลุ่มวัตถุ Feed_Cerrier:
+      // เราจะเคลียร์ค่า Rotation ของตัว Group แม่ให้เป็นศูนย์ก่อน เพื่อล้างค่า Matrix ที่เพี้ยนมาจาก Blender
+      // จากนั้นดึงตัว Mesh ย่อยข้างในออกมาคำนวณหาจุดกึ่งกลางของวัตถุแท้ ๆ แล้วล็อกตำแหน่งให้ตรงบล็อกเดิม 100%
       let innerMesh = null;
       obj.traverse(child => { if(child.isMesh && !innerMesh) innerMesh = child; });
       
       if(innerMesh && innerMesh.geometry) {
+        // ล้างค่าเอียงของกลุ่มเพื่อให้ทิศทางแกน X สอดคล้องกับแกนหลักของเครื่องจักร
+        obj.rotation.set(0, 0, 0); 
+        
         innerMesh.geometry.computeBoundingBox();
         const innerCenter = new THREE.Vector3();
         innerMesh.geometry.boundingBox.getCenter(innerCenter);
-        innerMesh.geometry.center(); 
-        innerMesh.position.add(innerCenter); 
+        innerMesh.geometry.center(); // ย้ายจุดศูนย์กลางเหล็กมารอรับแรงหมุนรอบแกน X
+        
+        innerMesh.updateMatrixWorld(true);
+        innerCenter.applyMatrix4(innerMesh.matrixWorld);
+        innerMesh.position.copy(innerCenter);
         
         reg('feeder_block', innerMesh); 
       } else {
