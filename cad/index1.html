@@ -238,7 +238,7 @@ function playAnim(id){
       // 🌟 4. Roll_2 (ล้อน้ำเงิน) หมุนแบบ 2:1 Ratio
       // เช็คตัวแปร cycles: จะหมุนเฉพาะรอบเลขคู่ (0, 2, 4...) เพื่อให้สัมพันธ์กับ Roll_1 x2
       if (cycles % 2 === 0) {
-        twRot('roller_blue', -Math.PI * 0.5, 0.6/S, 'x');
+        twRot('roller_blue', Math.PI * 0.5, 0.6/S, 'x');
         addLog('⚙️ Gear Ratio Trigger: Roll_2 Rotating (1 of 2 Roll_1 steps)', 'warn');
       }
       break;
