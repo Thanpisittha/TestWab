@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Independent Local Axis Fix)</title>
+  <title>BK05 — Digital Twin (2:1 Gear Ratio Synced)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -113,7 +113,7 @@
   <div class="counters">
     <div class="cnt"><div class="cnt-val" id="cCycles">0</div><div class="cnt-lbl">Feeds (Cycles)</div></div>
   </div>
-  <div class="sec-title">FSM States (3 Covers)</div>
+  <div class="sec-title">FSM States (Core Loops)</div>
   <div class="states" id="statesList"></div>
   <div class="log-wrap">
     <div class="log-hdr">
@@ -132,13 +132,14 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const PART_NAMES = {
   carrier_tape: 'Cerrier', 
   roller_feed:  'Roll_1', 
-  feeder_block: 'Feed_Cerrier', 
+  feeder_block: 'Feed_Cerrier',
+  roller_blue:  'Roll_2', 
 };
 
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบแกนตัวเองอยู่กับที่ 100%'}, 
+  {id:'INDEX',      action:'Roll_1: x2 | Roll_2: x1 (Synced)'}, 
 ];
 
 const TR = {
@@ -192,16 +193,7 @@ const tweens=[];
 function tw(role,delta,durSec,onDone=null){
   const mesh=meshMap[role]; if(!mesh) return;
   const i=tweens.findIndex(t=>t.role===role); if(i>-1) tweens.splice(i,1);
-  
-  tweens.push({
-    role,
-    mesh,
-    from: mesh.position.clone(),
-    to: mesh.position.clone().add(delta), 
-    dur: durSec,
-    elapsed: 0,
-    onDone
-  });
+  tweens.push({role,mesh,from:mesh.position.clone(),to:mesh.position.clone().add(delta),dur:durSec,elapsed:0,onDone});
   document.getElementById('animTag').style.display='block';
 }
 
@@ -209,26 +201,14 @@ function twRot(role,deltaRot,durSec,axis='x',onDone=null){
   const mesh=meshMap[role]; if(!mesh) return;
   const key=role+'_r';
   const i=tweens.findIndex(t=>t.role===key); if(i>-1) tweens.splice(i,1);
-  
-  tweens.push({
-    role: key,
-    mesh,
-    fromRot: mesh.rotation[axis],
-    toRot: mesh.rotation[axis] + deltaRot,
-    isRot: true,
-    rotAxis: axis,
-    dur: durSec,
-    elapsed: 0,
-    onDone
-  });
+  tweens.push({role:key,mesh,fromRot:mesh.rotation[axis],toRot:mesh.rotation[axis]+deltaRot,isRot:true,rotAxis:axis,dur:durSec,elapsed:0,onDone});
   document.getElementById('animTag').style.display='block';
 }
 
 function ret(role,durSec=0.18){
   const mesh=meshMap[role]; if(!mesh||!origPos[role]) return;
   const i=tweens.findIndex(t=>t.role===role); if(i>-1) tweens.splice(i,1);
-  tweens.push({role,mesh,from:mesh.position.clone(),to:origPos[role].clone(),
-    dur:durSec,elapsed:0,onDone:null});
+  tweens.push({role,mesh,from:mesh.position.clone(),to:origPos[role].clone(),dur:durSec,elapsed:0,onDone:null});
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
@@ -239,22 +219,28 @@ function restoreAll(){
   });
 }
 
-// ── 🎬 ฟังก์ชันควบคุมแอนิเมชัน ──
+// ── 🎬 ฟังก์ชันควบคุมแอนิเมชัน (Gear Sync 2:1 Logic) ──
 function playAnim(id){
   restoreAll();
   const S = speedMul;
 
   switch(id){
     case 'INDEX':
-      // 1. Cerrier เลื่อนหน้าตามแนวรางพิกัดแกน Z
+      // 1. Cerrier เลื่อนทุกรอบ
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 หมุนรอบแกนตัวเองแนวราบ (แกน X ท้องถิ่น)
+      // 2. Roll_1 (ล้อแดง) หมุนตามเข็มทุกรอบ
       twRot('roller_feed', -Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. 🌟 Feed_Cerrier สั่งหมุนรอบแกน X ของตัวเองตรงเป๊ะ 100% 
-      // เนื่องจากระบบคัดลอกย้ายค่ายมาเกาะ Scene โลกหลักแล้ว ทิศทางจะขนานล้อแดงเป๊ะๆ ไม่เหวี่ยงอ้อมรอบตัวอื่นครับนิว
+      // 3. Feed_Cerrier (ม้วนขาวกลาง) หมุนตามเข็มทุกรอบ (แกน Z)
       twRot('feeder_block', -Math.PI * 0.5, 0.6/S, 'z');
+
+      // 🌟 4. Roll_2 (ล้อน้ำเงิน) หมุนแบบ 2:1 Ratio
+      // เช็คตัวแปร cycles: จะหมุนเฉพาะรอบเลขคู่ (0, 2, 4...) เพื่อให้สัมพันธ์กับ Roll_1 x2
+      if (cycles % 2 === 0) {
+        twRot('roller_blue', -Math.PI * 0.5, 0.6/S, 'x');
+        addLog('⚙️ Gear Ratio Trigger: Roll_2 Rotating (1 of 2 Roll_1 steps)', 'warn');
+      }
       break;
 
     case 'INIT':
@@ -272,14 +258,8 @@ function animate(){
   for(let i=tweens.length-1;i>=0;i--){
     const t=tweens[i]; t.elapsed+=dt;
     const p=Math.min(t.elapsed/t.dur,1), ep=ease(p);
-    
-    if(t.isRot) {
-      t.mesh.rotation[t.rotAxis||'x'] = t.fromRot + (t.toRot - t.fromRot) * ep;
-    }
-    else {
-      t.mesh.position.lerpVectors(t.from,t.to,ep);
-    }
-    
+    if(t.isRot) t.mesh.rotation[t.rotAxis||'x'] = t.fromRot + (t.toRot - t.fromRot) * ep;
+    else t.mesh.position.lerpVectors(t.from,t.to,ep);
     if(p>=1){tweens.splice(i,1);}
   }
   if(tweens.length===0) document.getElementById('animTag').style.display='none';
@@ -287,229 +267,117 @@ function animate(){
 }
 animate();
 
-// ── โหลดไฟล์โมเดล Run.glb และจัดระเบียบแกนปลดแอก Hierarchy แม่-ลูก ──
+// ── โหลดไฟล์โมเดล Run.glb และจัดระเบียบแกน ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
-  const model = gltf.scene;
-  scene.add(model);
-  
-  model.traverse(obj => {
-    if(obj.isMesh) {
-      obj.castShadow = true;
-      obj.receiveShadow = true;
-    }
-  });
+  const model = gltf.scene; scene.add(model);
+  model.traverse(obj => { if(obj.isMesh) { obj.castShadow = obj.receiveShadow = true; } });
 
   const box=new THREE.Box3().setFromObject(model);
   const center=box.getCenter(new THREE.Vector3());
   const size=box.getSize(new THREE.Vector3()).length();
-  
   camera.position.set(center.x + size*0.6, center.y + size*0.5, center.z + size*0.8);
-  controls.target.copy(center);
-  controls.update();
+  controls.target.copy(center); controls.update();
   
-  // สร้างอาเรย์พักข้อมูลเพื่อป้องกันการวนลูปขัดข้องขณะสลับตำแหน่งโครงสร้าง
   let feederGroup = null;
-  
   model.traverse(obj => {
-    if (obj.name === PART_NAMES.carrier_tape) {
-      reg('carrier_tape', obj);
-    } 
+    if (obj.name === PART_NAMES.carrier_tape) reg('carrier_tape', obj);
     else if (obj.name === PART_NAMES.roller_feed) {
       obj.geometry.computeBoundingBox();
-      const localCenter = new THREE.Vector3();
-      obj.geometry.boundingBox.getCenter(localCenter);
-      obj.geometry.center(); 
-      obj.updateMatrixWorld(true);
-      localCenter.applyMatrix4(obj.matrixWorld);
-      obj.position.copy(localCenter);
-      reg('roller_feed', obj);
+      const localCenter = new THREE.Vector3(); obj.geometry.boundingBox.getCenter(localCenter);
+      obj.geometry.center(); obj.updateMatrixWorld(true); localCenter.applyMatrix4(obj.matrixWorld);
+      obj.position.copy(localCenter); reg('roller_feed', obj);
     } 
-    else if (obj.name === PART_NAMES.feeder_block) {
-      feederGroup = obj; // ตวงจำก้อนกลุ่ม Feed_Cerrier ไว้
+    else if (obj.name === PART_NAMES.roller_blue) {
+      if(obj.isMesh) {
+        obj.geometry.computeBoundingBox();
+        const blueCenter = new THREE.Vector3(); obj.geometry.boundingBox.getCenter(blueCenter);
+        obj.geometry.center(); blueCenter.applyMatrix4(obj.matrixWorld);
+        obj.position.copy(blueCenter); reg('roller_blue', obj);
+      } else { reg('roller_blue', obj); }
     }
+    else if (obj.name === PART_NAMES.feeder_block) feederGroup = obj;
   });
   
-  // 🌟 🌟 🌟 หัวใจสำคัญการแก้ไขบั๊กเหวี่ยงข้ามค่าย: ปลดแอกระบบ Hierarchy แม่-ลูก 🌟 🌟 🌟
   if(feederGroup) {
-    // 1. สั่งให้อัพเดต Matrix พิกัดตำแหน่งดั้งเดิมใน Blender ขึ้นสู่โลกจำลองความจริงก่อน
     feederGroup.updateMatrixWorld(true);
-    
-    // 2. ตวงพิกัดตำแหน่งและมุมเอียงสัมบูรณ์ (World Position/Quaternion) เก็บไว้
-    const worldPos = new THREE.Vector3();
-    const worldQuat = new THREE.Quaternion();
-    const worldScale = new THREE.Vector3();
+    const worldPos = new THREE.Vector3(), worldQuat = new THREE.Quaternion(), worldScale = new THREE.Vector3();
     feederGroup.matrixWorld.decompose(worldPos, worldQuat, worldScale);
-    
-    // 3. ย้ายก้อนชิ้นส่วนนี้หลุดออกจากลูปของตัวเครื่องจักรเดิม แล้วเอามาผูกติดกับก้อนหลักของ Scene ทันที!
-    scene.add(feederGroup);
-    
-    // 4. สั่งล็อกพิกัดคืนตำแหน่งเดิมเป๊ะๆ ชิ้นงานจะตั้งอยู่ที่เดิมบนตัวเครื่อง ไม่ขยับเยื้อง
-    feederGroup.position.copy(worldPos);
-    feederGroup.quaternion.copy(worldQuat);
-    feederGroup.scale.copy(worldScale);
-    
-    // 5. ดึงเอาเนื้อ Mesh กลมชิ้นในของกลุ่มขึ้นมาทำ Geometry Center ปลุกสูตรเด็ดเดียวกับ Roll_1 ให้หมุนรอบตัวเองลื่นๆ
-    let innerMesh = null;
-    feederGroup.traverse(child => { if(child.isMesh && !innerMesh) innerMesh = child; });
-    
+    scene.add(feederGroup); feederGroup.position.copy(worldPos); feederGroup.quaternion.copy(worldQuat); feederGroup.scale.copy(worldScale);
+    let innerMesh = null; feederGroup.traverse(child => { if(child.isMesh && !innerMesh) innerMesh = child; });
     if(innerMesh && innerMesh.geometry) {
       innerMesh.geometry.computeBoundingBox();
-      const innerCenter = new THREE.Vector3();
-      innerMesh.geometry.boundingBox.getCenter(innerCenter);
-      
-      innerMesh.geometry.center(); // เคลียร์เนื้อเหล็กเข้าศูนย์กลางกลุ่มตัวเองเป๊ะ ทรงไม่แตกไม่เบี้ยว
-      innerMesh.position.add(innerCenter); // ล็อกชดเชยค่า Offset สลัก
-      
-      reg('feeder_block', innerMesh); // ลงทะเบียนเป็นแกนควบคุมแอนิเมชันหลัก
-    } else {
-      reg('feeder_block', feederGroup);
-    }
+      const innerCenter = new THREE.Vector3(); innerMesh.geometry.boundingBox.getCenter(innerCenter);
+      innerMesh.geometry.center(); innerMesh.position.add(innerCenter); 
+      reg('feeder_block', innerMesh); 
+    } else { reg('feeder_block', feederGroup); }
   }
-  
-  addLog(`GLB loaded — จับคู่ชิ้นส่วนหลักเสร็จสิ้น [${Object.keys(meshMap).join(', ')}]`,'info');
+  addLog(`System Synchronized — 2:1 Ratio Active`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
-// ── UI Generation ──
+// ── UI & Engine Logic ──
 const sl=document.getElementById('statesList');
 STATES.forEach(s=>{
-  const el=document.createElement('div');
-  el.className='si';el.id='si_'+s.id;
+  const el=document.createElement('div'); el.className='si'; el.id='si_'+s.id;
   el.innerHTML=`<div class="si-dot"></div><span class="si-name">${s.id}</span><span class="si-action">${s.action}</span>`;
   sl.appendChild(el);
 });
 
 function addLog(msg,type='info'){
-  const b=document.getElementById('logBody');
-  const ts=new Date().toTimeString().slice(0,8);
-  const el=document.createElement('div');
-  el.className='le '+type;
+  const b=document.getElementById('logBody'); const ts=new Date().toTimeString().slice(0,8);
+  const el=document.createElement('div'); el.className='le '+type;
   el.innerHTML=`<span class="ts">${ts}</span><span class="ev">${msg}</span>`;
-  b.appendChild(el);b.scrollTop=b.scrollHeight;
+  b.appendChild(el); b.scrollTop=b.scrollHeight;
 }
 
-// ── ระบบ FSM Engine ──
-let current='READY', running=false, timer=null;
-let isManualMode = false; 
-let stepAllowed = false;   
-let cycles=0;
+let current='READY', running=false, timer=null, isManualMode = false, stepAllowed = false, cycles=0;
 
 window.switchMode = function(mode) {
-  if(mode === 'manual') {
-    isManualMode = true;
-    document.getElementById('btnModeManual').classList.add('active-mode');
-    document.getElementById('btnModeAuto').classList.remove('active-mode');
-    document.getElementById('speedRow').style.opacity = '0.4'; 
-    addLog('🕹️ โหมดควบคุมด้วยมือทีละสเตป (Manual Mode)', 'warn');
-    if(running && stepAllowed) {
-      document.getElementById('btnStep').disabled = false;
-    }
-  } else {
-    isManualMode = false;
-    document.getElementById('btnModeAuto').classList.add('active-mode');
-    document.getElementById('btnModeManual').classList.remove('active-mode');
-    document.getElementById('speedRow').style.opacity = '1';
-    document.getElementById('btnStep').disabled = true;
-    addLog('🤖 โหมดอัตโนมัติ (Auto Mode)', 'info');
-    if(running && stepAllowed) {
-      stepAllowed = false;
-      document.getElementById('btnStep').disabled = true;
-      triggerNextTransition();
-    }
-  }
+  isManualMode = (mode === 'manual');
+  document.getElementById('btnModeManual').classList.toggle('active-mode', isManualMode);
+  document.getElementById('btnModeAuto').classList.toggle('active-mode', !isManualMode);
+  document.getElementById('speedRow').style.opacity = isManualMode ? '0.4' : '1';
+  addLog(isManualMode ? '🕹️ Manual Mode' : '🤖 Auto Mode', isManualMode ? 'warn' : 'info');
 }
 
 function setState(id){
-  document.querySelectorAll('.si.active').forEach(e=>{
-    e.classList.remove('active');e.classList.add('visited');
-  });
+  document.querySelectorAll('.si.active').forEach(e=>{ e.classList.remove('active'); e.classList.add('visited'); });
   current=id;
-  const el=document.getElementById('si_'+id);
-  if(el){el.classList.remove('visited');el.classList.add('active');}
+  const el=document.getElementById('si_'+id); if(el){el.classList.remove('visited'); el.classList.add('active');}
   const s=STATES.find(x=>x.id===id);
-  
-  document.getElementById('ovState').textContent=id;
-  document.getElementById('ovState').className='ov-state';
-  document.getElementById('ovDesc').textContent=s?.action||'';
-  
+  document.getElementById('ovState').textContent=id; document.getElementById('ovDesc').textContent=s?.action||'';
   const dot=document.getElementById('hdot'), hs=document.getElementById('hstatus');
-  if(!running){dot.className='hdot'; hs.textContent='Idle';}
-  else{dot.className='hdot run'; hs.textContent='Running';}
+  dot.className = running ? 'hdot run' : 'hdot'; hs.textContent = running ? 'Running' : 'Idle';
   
-  playAnim(id);
+  playAnim(id); // <--- Animation check cycles internally
   
-  addLog('→ '+id+(s?' : '+s.action:''), 'info');
-  if(id==='INDEX') {cycles++; document.getElementById('cCycles').textContent=cycles;}
+  addLog('→ '+id, 'info');
+  if(id==='INDEX') { cycles++; document.getElementById('cCycles').textContent=cycles; }
   
   if(!running) return;
-
   timer = setTimeout(() => {
-    if (isManualMode) {
-      stepAllowed = true;
-      document.getElementById('btnStep').disabled = false;
-      addLog(`[Ready] สเตท ${id} ทำงานเสร็จแล้ว กดปุ่ม Step เพื่อไปต่อ...`, 'warn');
-    } else {
-      triggerNextTransition();
-    }
+    if (isManualMode) { stepAllowed = true; document.getElementById('btnStep').disabled = false; }
+    else advance('auto');
   }, ms(id));
 }
 
-function triggerNextTransition() {
-  const tr = TR[current]; if(!tr) return;
-  if(tr.auto){
-    advance('auto');
-  }
-}
+function advance(sig){ if(!running) return; clearTimeout(timer); const tr = TR[current]; const next = tr[sig] || tr.auto; if(next) setState(next); }
 
-function advance(sig){
-  if(!running) return;
-  clearTimeout(timer);
-  const tr = TR[current]; if(!tr) return;
-  const next = tr[sig] || tr.auto;
-  if(next) setState(next);
-}
-
-window.fsmStep = function() {
-  if(!running || !isManualMode || !stepAllowed) return;
-  stepAllowed = false;
-  document.getElementById('btnStep').disabled = true; 
-  triggerNextTransition();
-}
-
-window.fsmStart = function(){
-  if(running) return;
-  running=true;
-  stepAllowed = false;
-  document.getElementById('btnStart').disabled=true;
-  document.getElementById('btnReset').disabled=false;
-  setState('INIT');
-};
-
+window.fsmStep = function() { if(!running || !isManualMode || !stepAllowed) return; stepAllowed = false; document.getElementById('btnStep').disabled = true; advance('auto'); }
+window.fsmStart = function(){ if(running) return; running=true; setState('INIT'); document.getElementById('btnStart').disabled=true; document.getElementById('btnReset').disabled=false; };
 window.fsmReset = function(){
-  clearTimeout(timer); running=false; stepAllowed=false;
-  restoreAll(); tweens.length=0; cycles=0;
-  document.getElementById('cCycles').textContent=0;
-  
+  clearTimeout(timer); running=false; cycles=0; document.getElementById('cCycles').textContent=0;
+  restoreAll(); tweens.length=0;
   Object.keys(meshMap).forEach(role=>{
-    const m=meshMap[role];
-    if(m && origPos[role]){
-      m.position.copy(origPos[role]); 
-      if(m._origRot) {
-        m.rotation.copy(m._origRot); 
-      }
-    }
+    const m=meshMap[role]; if(m && origPos[role]){ m.position.copy(origPos[role]); if(m._origRot) m.rotation.copy(m._origRot); }
   });
-  
-  document.getElementById('btnStart').disabled=false;
-  document.getElementById('btnStep').disabled=true;
-  document.getElementById('btnReset').disabled=true;
-  document.getElementById('hdot').className='hdot';
-  document.getElementById('hstatus').textContent='Idle';
+  document.getElementById('btnStart').disabled=false; document.getElementById('btnStep').disabled=true; document.getElementById('btnReset').disabled=true;
+  document.getElementById('hdot').className='hdot'; document.getElementById('hstatus').textContent='Idle';
   document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','visited'));
-  document.getElementById('ovState').textContent='READY';
-  document.getElementById('ovState').className='ov-state';
-  document.getElementById('ovDesc').textContent='Waiting for Start';
-  current='READY'; addLog('↺ Reset ระบบกลับจุดเริ่มต้น เรียบร้อย','warn');
+  document.getElementById('ovState').textContent='READY'; current='READY';
 };
 </script>
 </body>
 </html>
+
+
+ลองอัปโหลดไปรันได้เลยครับ ระบบจะดูสมจริงเหมือนเครื่องจักรที่มีชุดเฟืองทดรอบเลยครับ!
