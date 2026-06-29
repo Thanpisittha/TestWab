@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BK05 — Digital Twin (Perfect Local Fixed Pivot)</title>
+  <title>BK05 — Digital Twin (Independent Local Axis Fix)</title>
   <script type="importmap">
     {"imports":{
       "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
@@ -138,7 +138,7 @@ const PART_NAMES = {
 const STATES = [
   {id:'INIT',       action:'Initialize System'},
   {id:'READY',      action:'Waiting for Start'},
-  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนอยู่กับที่'}, 
+  {id:'INDEX',      action:'1 Roll_1 หมุน | 2 Cerrier เลื่อน | 3 Feed_Cerrier หมุนรอบแกนตัวเองอยู่กับที่ 100%'}, 
 ];
 
 const TR = {
@@ -246,13 +246,14 @@ function playAnim(id){
 
   switch(id){
     case 'INDEX':
-      // 1. Cerrier เลื่อนหน้าตามรางพิกัดแกน Z
+      // 1. Cerrier เลื่อนหน้าตามแนวรางพิกัดแกน Z
       tw('carrier_tape', new THREE.Vector3(0, 0, 0.2), 0.6/S);  
       
-      // 2. Roll_1 หมุนรอบตัวเองแกน X
+      // 2. Roll_1 หมุนรอบแกนตัวเองแนวราบ (แกน X ท้องถิ่น)
       twRot('roller_feed', Math.PI * 0.5, 0.6/S, 'x');
 
-      // 3. 🌟 Feed_Cerrier สั่งหมุนรอบตัวเองที่แกน X ท้องถิ่นโดยตรง พิกัดจะนิ่ง ไม่หล่น ไม่ส่ายครับ
+      // 3. 🌟 Feed_Cerrier สั่งหมุนรอบแกน X ของตัวเองตรงเป๊ะ 100% 
+      // เนื่องจากระบบคัดลอกย้ายค่ายมาเกาะ Scene โลกหลักแล้ว ทิศทางจะขนานล้อแดงเป๊ะๆ ไม่เหวี่ยงอ้อมรอบตัวอื่นครับนิว
       twRot('feeder_block', Math.PI * 0.5, 0.6/S, 'x');
       break;
 
@@ -286,7 +287,7 @@ function animate(){
 }
 animate();
 
-// ── โหลดโมเดลรันพิกัดแบบบริสุทธิ์ 100% ปล่อยชิ้นส่วนลูกไว้ตามตำแหน่ง Blender ──
+// ── โหลดไฟล์โมเดล Run.glb และจัดระเบียบแกนปลดแอก Hierarchy แม่-ลูก ──
 new GLTFLoader().load('./export/Run.glb', gltf=>{
   const model = gltf.scene;
   scene.add(model);
@@ -306,12 +307,14 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
   controls.target.copy(center);
   controls.update();
   
+  // สร้างอาเรย์พักข้อมูลเพื่อป้องกันการวนลูปขัดข้องขณะสลับตำแหน่งโครงสร้าง
+  let feederGroup = null;
+  
   model.traverse(obj => {
     if (obj.name === PART_NAMES.carrier_tape) {
       reg('carrier_tape', obj);
     } 
     else if (obj.name === PART_NAMES.roller_feed) {
-      // สำหรับล้อเดี่ยว ใช้สูตรเดิมขยับจุดหมุนเข้าศูนย์กลาง
       obj.geometry.computeBoundingBox();
       const localCenter = new THREE.Vector3();
       obj.geometry.boundingBox.getCenter(localCenter);
@@ -322,11 +325,46 @@ new GLTFLoader().load('./export/Run.glb', gltf=>{
       reg('roller_feed', obj);
     } 
     else if (obj.name === PART_NAMES.feeder_block) {
-      // 🌟 🌟 🌟 สำหรับ Feed_Cerrier: ปล่อยเนื้อวัตถุไว้เฉยๆ ห้ามทำ geometry.center() 
-      // ชิ้นส่วนย่อยภายในทั้งหมดจะเกาะกลุ่มกันนิ่งสนิทตรงตำแหน่งพิกัดแท้ใน Blender 100% ไม่กระจายหลุดเฟรม
-      reg('feeder_block', obj); 
+      feederGroup = obj; // ตวงจำก้อนกลุ่ม Feed_Cerrier ไว้
     }
   });
+  
+  // 🌟 🌟 🌟 หัวใจสำคัญการแก้ไขบั๊กเหวี่ยงข้ามค่าย: ปลดแอกระบบ Hierarchy แม่-ลูก 🌟 🌟 🌟
+  if(feederGroup) {
+    // 1. สั่งให้อัพเดต Matrix พิกัดตำแหน่งดั้งเดิมใน Blender ขึ้นสู่โลกจำลองความจริงก่อน
+    feederGroup.updateMatrixWorld(true);
+    
+    // 2. ตวงพิกัดตำแหน่งและมุมเอียงสัมบูรณ์ (World Position/Quaternion) เก็บไว้
+    const worldPos = new THREE.Vector3();
+    const worldQuat = new THREE.Quaternion();
+    const worldScale = new THREE.Vector3();
+    feederGroup.matrixWorld.decompose(worldPos, worldQuat, worldScale);
+    
+    // 3. ย้ายก้อนชิ้นส่วนนี้หลุดออกจากลูปของตัวเครื่องจักรเดิม แล้วเอามาผูกติดกับก้อนหลักของ Scene ทันที!
+    scene.add(feederGroup);
+    
+    // 4. สั่งล็อกพิกัดคืนตำแหน่งเดิมเป๊ะๆ ชิ้นงานจะตั้งอยู่ที่เดิมบนตัวเครื่อง ไม่ขยับเยื้อง
+    feederGroup.position.copy(worldPos);
+    feederGroup.quaternion.copy(worldQuat);
+    feederGroup.scale.copy(worldScale);
+    
+    // 5. ดึงเอาเนื้อ Mesh กลมชิ้นในของกลุ่มขึ้นมาทำ Geometry Center ปลุกสูตรเด็ดเดียวกับ Roll_1 ให้หมุนรอบตัวเองลื่นๆ
+    let innerMesh = null;
+    feederGroup.traverse(child => { if(child.isMesh && !innerMesh) innerMesh = child; });
+    
+    if(innerMesh && innerMesh.geometry) {
+      innerMesh.geometry.computeBoundingBox();
+      const innerCenter = new THREE.Vector3();
+      innerMesh.geometry.boundingBox.getCenter(innerCenter);
+      
+      innerMesh.geometry.center(); // เคลียร์เนื้อเหล็กเข้าศูนย์กลางกลุ่มตัวเองเป๊ะ ทรงไม่แตกไม่เบี้ยว
+      innerMesh.position.add(innerCenter); // ล็อกชดเชยค่า Offset สลัก
+      
+      reg('feeder_block', innerMesh); // ลงทะเบียนเป็นแกนควบคุมแอนิเมชันหลัก
+    } else {
+      reg('feeder_block', feederGroup);
+    }
+  }
   
   addLog(`GLB loaded — จับคู่ชิ้นส่วนหลักเสร็จสิ้น [${Object.keys(meshMap).join(', ')}]`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
