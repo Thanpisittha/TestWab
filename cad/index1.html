@@ -26,7 +26,6 @@
     .hdot.inspect{background:var(--amber);box-shadow:0 0 6px var(--amber)}
     #hstatus{font-size:12px;color:var(--muted);margin-left:6px;margin-right:16px}
     
-    /* 🌟 สไตล์ปุ่ม Home ที่เพิ่มเข้ามาใหม่ */
     .home-btn{
       display:flex;align-items:center;justify-content:center;
       font-size:16px;color:var(--muted);text-decoration:none;
@@ -103,7 +102,7 @@
   <a href="index.html" class="home-btn" title="กลับหน้าหลัก (Home)">🏠</a>
   
   <div class="hdot" id="hdot"></div>
-  <span id="hstatus">Idle</span>
+  <span id="hstatus">Connecting to Gateway...</span>
 </header>
 
 <div id="canvas-wrap">
@@ -137,7 +136,7 @@
     <div class="speed-row">
       <span class="slbl">Auto Speed</span>
       <input type="range" id="spd" min="0.5" max="3" step="0.5" value="1"
-        oninput="speedMul=+this.value;document.getElementById('sval').textContent=this.value+'×'">
+        oninput="updateSpeed(this.value)">
       <span class="sval" id="sval">1×</span>
     </div>
   </div>
@@ -146,7 +145,7 @@
     <div class="cnt"><div class="cnt-val" id="cCycles">0</div><div class="cnt-lbl">Feeds (Cycles)</div></div>
   </div>
   
-  <div class="sec-title">FSM Flow States</div>
+  <div class="sec-title" id="statesHeader">FSM Flow States</div>
   <div class="states" id="statesList"></div>
   
   <div class="log-wrap">
@@ -188,31 +187,7 @@ const STATES = [
   {id:'ROLL',          action:'Motor 2 (Roll_2) ม้วนเทปเก็บ (รอบคู่)', isCheck:false}
 ];
 
-const TR = {
-  INIT:          {auto:'READY'},
-  READY:         {auto:'SET_PARAMS'},
-  SET_PARAMS:    {auto:'INDEX'},
-  INDEX:         {auto:'CHECK_CARRIER'},
-  CHECK_CARRIER: {auto:'LOAD_PART'},
-  LOAD_PART:     {auto:'VISION'},
-  VISION:        {auto:'COUNT_CHECK'},
-  COUNT_CHECK:   {auto:'FEED_COVER'},
-  FEED_COVER:    {auto:'CHECK_TEMP'},
-  CHECK_TEMP:    {auto:'SEAL_DOWN'},
-  SEAL_DOWN:     {auto:'SEAL_UP'},
-  SEAL_UP:       {auto:'VISION_QC'},
-  VISION_QC:     {auto:'ROLL'},
-  ROLL:          {auto:'INDEX'}
-};
-
-const DUR = { 
-  INIT:500, READY:500, SET_PARAMS:500,
-  INDEX:1000, CHECK_CARRIER:300, LOAD_PART:600, VISION:300, COUNT_CHECK:300,
-  FEED_COVER:600, CHECK_TEMP:300, SEAL_DOWN:1000, SEAL_UP:1000, VISION_QC:300, ROLL:1000 
-};
-
 window.speedMul = 1;
-const ms = id => (DUR[id]||500) / speedMul;
 
 // ── Three.js Engine Setup ──
 const canvas = document.getElementById('c');
@@ -269,16 +244,9 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-function restoreAll(){
-  Object.keys(meshMap).forEach(r=>{
-    const m=meshMap[r];
-    if(m&&origMat[r]) m.material=Array.isArray(origMat[r])?origMat[r].map(x=>x.clone()):origMat[r].clone();
-  });
-}
-
 // ── 🎬 Animation Mapping ──
 function playAnim(id){
-  const S = speedMul;
+  const S = window.speedMul;
   const sealMesh = meshMap['sealing_head'];
   const tapeMesh = meshMap['carrier_tape'];
 
@@ -321,6 +289,11 @@ function playAnim(id){
     case 'INIT':
       ret('carrier_tape', 0.25/S); 
       ret('sealing_head', 0.25/S);
+      break;
+      
+    case 'READY':
+      ret('carrier_tape', 0.1/S);
+      ret('sealing_head', 0.1/S);
       break;
   }
 }
@@ -393,7 +366,7 @@ new GLTFLoader().load('./export/Machine.glb', gltf=>{
   addLog(`System Core Loaded Successfully`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
-// ── UI & Engine Logic ──
+// ── UI List Setup ──
 const sl=document.getElementById('statesList');
 STATES.forEach(s=>{
   const el=document.createElement('div'); el.className='si'; el.id='si_'+s.id;
@@ -408,119 +381,158 @@ function addLog(msg,type='info'){
   b.appendChild(el); b.scrollTop=b.scrollHeight;
 }
 
-// ── ระบบ FSM Control Engine ──
-let current='READY', running=false, timer=null, isSemiAutoMode = false, stepAllowed = false, cycles=0;
-
-window.switchMode = function(mode) {
-  isSemiAutoMode = (mode === 'semi');
-  document.getElementById('btnModeSemi').classList.toggle('active-mode', isSemiAutoMode);
-  document.getElementById('btnModeAuto').classList.toggle('active-mode', !isSemiAutoMode);
-  
-  if (!isSemiAutoMode) {
-    stepAllowed = false;
-    document.getElementById('btnOK').disabled = true;
-    document.getElementById('btnNG').disabled = true;
-  }
-  
-  addLog(isSemiAutoMode ? '🕹️ Semi-Auto Mode (หยุดรอสัญญาณ OK/NG ในจุดตรวจ)' : '🤖 Auto Mode (รันต่อเนื่องอัตโนมัติ)', isSemiAutoMode ? 'warn' : 'info');
-  
-  if(!isSemiAutoMode && running && stepAllowed) {
-    stepAllowed = false;
-    triggerNextTransition();
-  }
+function bitsSpaced(v) {
+  let b = (v || 0).toString(2);
+  while (b.length < 8) b = "0" + b;
+  return b.slice(0, 4) + " " + b.slice(4);
 }
 
-function setState(id){
-  document.querySelectorAll('.si.active').forEach(e=>{ e.classList.remove('active','inspecting'); e.classList.add('visited'); });
-  current=id;
-  const el=document.getElementById('si_'+id); 
-  const s=STATES.find(x=>x.id===id);
-  
-  if(el){
-    el.classList.remove('visited'); el.classList.add('active');
-    if(s && s.isCheck && isSemiAutoMode) el.classList.add('inspecting');
-  }
-  
-  document.getElementById('ovState').textContent=id; document.getElementById('ovDesc').textContent=s?.action||'';
-  document.getElementById('ovState').classList.toggle('inspect-mode', (s?.isCheck && isSemiAutoMode));
-  
-  const dot=document.getElementById('hdot'), hs=document.getElementById('hstatus');
-  if(!running) {
-    dot.className = 'hdot'; hs.textContent = 'Idle';
-    document.getElementById('ovLabel').textContent = "Current State";
-  } else if (s && s.isCheck && isSemiAutoMode) {
-    dot.className = 'hdot inspect'; hs.textContent = 'Awaiting OK / NG Decision...';
-    document.getElementById('ovLabel').textContent = "⚠️ AWAITING QUALITY CHECK";
-  } else {
-    dot.className = 'hdot run'; hs.textContent = 'Running';
-    document.getElementById('ovLabel').textContent = "Current State";
-  }
+// ── 🌐 WEBSOCKET SYNCHRONIZATION CLIENT ──
+let ws = null;
+let current = 'READY';
+let running = false;
+let isSemiAutoMode = false;
+let stepAllowed = false;
+let cycles = 0;
+let station_id = "?";
+let fw_version = "?";
 
-  if(id==='INDEX') { cycles++; document.getElementById('cCycles').textContent=cycles; }
+function connectGateway() {
+  ws = new WebSocket('ws://localhost:8765');
   
-  playAnim(id);
-  addLog('→ '+id, 'info');
+  ws.onopen = () => {
+    addLog('🌐 Connected to Python Gateway FSM Server', 'info');
+    document.getElementById('hdot').className = 'hdot run';
+    document.getElementById('hstatus').textContent = 'Connected (Live Twin Sync)';
+  };
   
-  if(!running) return;
-
-  timer = setTimeout(() => {
-    if (s && s.isCheck && isSemiAutoMode) {
-      stepAllowed = true;
-      document.getElementById('btnOK').disabled = false;
-      document.getElementById('btnNG').disabled = false;
-      addLog(`[Awaiting] สเตต ${id} รอคำสั่งยืนยันหน้าบอร์ด ➔ กด OK เพื่อไปต่อ หรือ NG เพื่อสั่งหยุด`, 'warn');
-    } else {
-      triggerNextTransition();
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    
+    // 1. ตรวจจับสเตปจากสมอง Python เพื่ออัปเดตและเล่นแอนิเมชัน 3D บนเว็บ
+    if (current !== data.current_state) {
+      current = data.current_state;
+      
+      document.querySelectorAll('.si.active').forEach(e=>{ 
+        e.classList.remove('active','inspecting'); e.classList.add('visited'); 
+      });
+      
+      const el = document.getElementById('si_' + current);
+      const s = STATES.find(x => x.id === current);
+      if(el){
+        el.classList.remove('visited'); el.classList.add('active');
+        if(s && s.isCheck && data.mode === 'semi') el.classList.add('inspecting');
+      }
+      
+      document.getElementById('ovState').textContent = current;
+      document.getElementById('ovDesc').textContent = s?.action || '';
+      document.getElementById('ovState').classList.toggle('inspect-mode', (s?.isCheck && data.mode === 'semi'));
+      
+      playAnim(current);
+      addLog('→ ' + current, 'info');
     }
-  }, ms(id));
-}
-
-function triggerNextTransition() {
-  const tr = TR[current]; if(!tr) return;
-  if(tr.auto) { clearTimeout(timer); const next = tr.auto; if(next) setState(next); }
-}
-
-window.fsmDecision = function(isPassed) {
-  if (!running || !isSemiAutoMode || !stepAllowed) return;
+    
+    // 2. ซิงค์ตัวแปรควบคุมระบบทั้งหมดมาอัปเดต Dashboard
+    running = data.running;
+    isSemiAutoMode = (data.mode === 'semi');
+    stepAllowed = data.step_allowed;
+    cycles = data.cycles;
+    station_id = data.station_id;
+    fw_version = data.fw_version;
+    window.speedMul = data.speed_mul;
+    
+    document.getElementById('cCycles').textContent = cycles;
+    document.getElementById('spd').value = window.speedMul;
+    document.getElementById('sval').textContent = window.speedMul + '×';
+    
+    // โชว์ค่าบิตสถานะของ IO บอร์ดจริงบนหัวข้อสเตตัส
+    const headerEl = document.getElementById('statesHeader');
+    headerEl.innerHTML = `FSM Flow States &nbsp;&nbsp;|&nbsp;&nbsp; OP0: [ ${bitsSpaced(data.op0)} ] &nbsp;&nbsp;|&nbsp;&nbsp; IP0: [ ${bitsSpaced(data.ip0)} ]`;
+    
+    // จัดการไอคอนและไฟสปอตไลท์สถานะ
+    const dot = document.getElementById('hdot');
+    const hs = document.getElementById('hstatus');
+    if(!running) {
+      dot.className = 'hdot'; 
+      if (current === 'READY' && data.cycles === 0 && !stepAllowed) {
+         hs.textContent = `Connected (Live Twin Sync) | Station: ${station_id}`;
+      } else {
+         dot.className = 'hdot inspect';
+         hs.textContent = 'STOPPED (NG TRIPPED) 🚨';
+      }
+      document.getElementById('ovLabel').textContent = !running && current !== 'READY' ? "🚨 CRITICAL NG ALERT" : "Current State";
+    } else if (stepAllowed) {
+      dot.className = 'hdot inspect'; hs.textContent = 'Awaiting OK / NG Decision...';
+      document.getElementById('ovLabel').textContent = "⚠️ AWAITING QUALITY CHECK";
+    } else {
+      dot.className = 'hdot run'; hs.textContent = `Running (FW: ${fw_version})`;
+      document.getElementById('ovLabel').textContent = "Current State";
+    }
+    
+    // ล็อกปุ่มเปิด/ปิดหน้าเว็บตามเงื่อนไขเซิร์ฟเวอร์
+    document.getElementById('btnStart').disabled = running;
+    document.getElementById('btnReset').disabled = !running && current === 'READY';
+    
+    document.getElementById('btnModeSemi').classList.toggle('active-mode', isSemiAutoMode);
+    document.getElementById('btnModeAuto').classList.toggle('active-mode', !isSemiAutoMode);
+    
+    document.getElementById('btnOK').disabled = !stepAllowed;
+    document.getElementById('btnNG').disabled = !stepAllowed;
+  };
   
-  stepAllowed = false;
-  document.getElementById('btnOK').disabled = true;
-  document.getElementById('btnNG').disabled = true;
-  
-  if (isPassed) {
-    addLog(`✅ Inspection OK [${current}] ➔ ผลการตรวจสอบผ่านเงื่อนไข รันสเตปถัดไป`, 'info');
-    triggerNextTransition();
-  } else {
-    running = false;
-    clearTimeout(timer);
+  ws.onclose = () => {
+    addLog('❌ Lost connection to Python Gateway. Retrying in 1s...', 'err');
     document.getElementById('hdot').className = 'hdot';
-    document.getElementById('hstatus').textContent = 'STOPPED (NG TRIPPED)';
-    document.getElementById('ovLabel').textContent = "🚨 CRITICAL NG ALERT";
-    addLog(`❌ QUALITY ERROR [${current}]: ชิ้นงานไม่ผ่านเกณฑ์ (NG)! ตัดสัญญาณสวิตช์เครื่องจักรหยุดทันที`, 'err');
-  }
+    document.getElementById('hstatus').textContent = 'Disconnected';
+    setTimeout(connectGateway, 1000);
+  };
 }
+
+connectGateway();
+
+// ── 🕹️ ส่วนส่งคำสั่งจากหน้าจอเว็บกลับไปควบคุมสมองกลหลักใน Python ──
+window.switchMode = function(mode) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "MODE", mode: mode }));
+  }
+};
 
 window.fsmStart = function(){ 
-  if(running) return; 
-  running=true; 
-  stepAllowed = false;
-  setState('INIT'); 
-  document.getElementById('btnStart').disabled=true; 
-  document.getElementById('btnReset').disabled=false; 
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "START" }));
+    addLog('▶ Sent START signal to central FSM master', 'info');
+  }
 };
 
 window.fsmReset = function(){
-  clearTimeout(timer); running=false; stepAllowed=false; cycles=0; document.getElementById('cCycles').textContent=0;
-  tweens.length=0;
-  Object.keys(meshMap).forEach(role=>{
-    const m=meshMap[role]; if(m && origPos[role]){ m.position.copy(origPos[role]); if(m._origRot) m.rotation.copy(m._origRot); }
-  });
-  document.getElementById('btnStart').disabled=false; document.getElementById('btnReset').disabled=true;
-  document.getElementById('btnOK').disabled=true; document.getElementById('btnNG').disabled=true;
-  document.getElementById('hdot').className='hdot'; document.getElementById('hstatus').textContent='Idle';
-  document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','visited','inspecting'));
-  document.getElementById('ovState').textContent='READY'; document.getElementById('ovLabel').textContent = "Current State";
-  document.getElementById('ovState').classList.remove('inspect-mode'); current='READY';
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "RESET" }));
+    
+    // ล้างกราฟิกโมเดล 3D กลับสู่จุดเริ่มต้น
+    Object.keys(meshMap).forEach(role=>{
+      const m=meshMap[role]; if(m && origPos[role]){ m.position.copy(origPos[role]); if(m._origRot) m.rotation.copy(m._origRot); }
+    });
+    document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','visited','inspecting'));
+    document.getElementById('ovState').textContent='READY'; 
+    document.getElementById('ovLabel').textContent = "Current State";
+    document.getElementById('ovState').classList.remove('inspect-mode');
+    addLog('↺ Reset Visualizer Sequence', 'info');
+  }
+};
+
+window.fsmDecision = function(isPassed) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "DECISION", value: isPassed }));
+    if(!isPassed) {
+      addLog(`❌ QUALITY ERROR SENT: ชิ้นงานไม่ผ่านเกณฑ์ (NG)! สั่งเบรกเครื่องจักรอัตโนมัติ`, 'err');
+    }
+  }
+};
+
+window.updateSpeed = function(val) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "SPEED", value: +val }));
+  }
 };
 </script>
 </body>
