@@ -2,506 +2,275 @@
 <html lang="en">
 
 <head>
-
-<meta charset="UTF-8">
-
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<title>BK05 Digital Twin</title>
-
-<script type="module"
-src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js">
-</script>
-
-<style>
-
-*{
-margin:0;
-padding:0;
-box-sizing:border-box;
-}
-
-body{
-
-background:#090b10;
-
-font-family:Segoe UI;
-
-overflow:hidden;
-
-}
-
-/* ===================== */
-
-model-viewer{
-
-width:100vw;
-
-height:100vh;
-
-background:
-
-radial-gradient(circle at center,
-
-#1b2430 0%,
-
-#090b10 90%);
-
-}
-
-/* ===================== */
-
-.topbar{
-
-position:absolute;
-
-top:0;
-
-left:0;
-
-width:100%;
-
-height:70px;
-
-background:rgba(10,10,10,.45);
-
-backdrop-filter:blur(20px);
-
-border-bottom:1px solid rgba(255,255,255,.05);
-
-display:flex;
-
-justify-content:space-between;
-
-align-items:center;
-
-padding:0 40px;
-
-z-index:10;
-
-}
-
-.logo{
-
-font-size:26px;
-
-font-weight:bold;
-
-color:#00d8ff;
-
-letter-spacing:2px;
-
-text-shadow:0 0 20px #00d8ff;
-
-}
-
-.version{
-
-color:#8fa3b8;
-
-}
-
-/* ===================== */
-
-.panel{
-
-position:absolute;
-
-top:100px;
-
-left:40px;
-
-width:320px;
-
-padding:25px;
-
-background:rgba(20,20,25,.55);
-
-backdrop-filter:blur(20px);
-
-border-radius:18px;
-
-border:1px solid rgba(255,255,255,.06);
-
-box-shadow:
-
-0 10px 40px rgba(0,0,0,.5);
-
-z-index:10;
-
-}
-
-.panel h2{
-
-color:white;
-
-margin-bottom:20px;
-
-}
-
-.status{
-
-display:flex;
-
-justify-content:space-between;
-
-padding:10px 0;
-
-border-bottom:1px solid rgba(255,255,255,.05);
-
-font-size:14px;
-
-}
-
-.status span{
-
-color:#8fa3b8;
-
-}
-
-.value{
-
-color:#00ffa6;
-
-font-weight:bold;
-
-}
-
-/* ===================== */
-
-.info{
-
-position:absolute;
-
-right:40px;
-
-top:100px;
-
-width:320px;
-
-padding:25px;
-
-background:rgba(20,20,25,.55);
-
-backdrop-filter:blur(20px);
-
-border-radius:18px;
-
-border:1px solid rgba(255,255,255,.06);
-
-z-index:10;
-
-}
-
-.info h2{
-
-color:white;
-
-margin-bottom:20px;
-
-}
-
-.info ul{
-
-list-style:none;
-
-}
-
-.info li{
-
-padding:10px 0;
-
-color:#d6d9df;
-
-}
-
-/* ===================== */
-
-.center{
-
-position:absolute;
-
-bottom:80px;
-
-width:100%;
-
-text-align:center;
-
-z-index:20;
-
-}
-
-.title{
-
-font-size:48px;
-
-font-weight:bold;
-
-color:white;
-
-letter-spacing:4px;
-
-text-shadow:0 0 20px #00d8ff;
-
-}
-
-.subtitle{
-
-margin-top:15px;
-
-color:#98a7bb;
-
-font-size:18px;
-
-}
-
-.enter{
-
-margin-top:35px;
-
-display:inline-block;
-
-padding:18px 45px;
-
-border-radius:40px;
-
-background:#00d8ff;
-
-color:black;
-
-text-decoration:none;
-
-font-weight:bold;
-
-transition:.3s;
-
-box-shadow:0 0 25px #00d8ff;
-
-}
-
-.enter:hover{
-
-background:#00ffa6;
-
-transform:translateY(-4px);
-
-box-shadow:0 0 35px #00ffa6;
-
-}
-
-/* ===================== */
-
-.scan{
-
-position:absolute;
-
-top:0;
-
-left:-100%;
-
-width:40%;
-
-height:100%;
-
-background:linear-gradient(
-
-90deg,
-
-transparent,
-
-rgba(0,255,255,.08),
-
-transparent);
-
-animation:scan 6s infinite;
-
-pointer-events:none;
-
-z-index:5;
-
-}
-
-@keyframes scan{
-
-0%{
-
-left:-50%;
-
-}
-
-100%{
-
-left:120%;
-
-}
-
-}
-
-.footer{
-
-position:absolute;
-
-bottom:20px;
-
-left:40px;
-
-color:#607080;
-
-font-size:13px;
-
-z-index:10;
-
-}
-
-</style>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Demo Digital Twin</title>
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #060814;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* ===================== */
+        model-viewer {
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at center, #16222f 0%, #060814 100%);
+        }
+
+        /* ===================== */
+        .topbar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 75px;
+            background: rgba(10, 12, 22, 0.3);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 50px;
+            z-index: 10;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: #00d8ff;
+            letter-spacing: 3px;
+            text-shadow: 0 0 25px rgba(0, 216, 255, 0.6);
+            text-transform: uppercase;
+        }
+
+        .version {
+            color: #6f859c;
+            font-size: 14px;
+            font-weight: 500;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* ===================== */
+        /* ย้ายกล่อง Features มาฝั่งซ้ายเพื่อความสมดุลหลังลบ Status ออก */
+        .info {
+            position: absolute;
+            left: 50px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 340px;
+            padding: 30px;
+            background: rgba(15, 22, 36, 0.45);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border-radius: 24px;
+            border: 1px solid rgba(0, 216, 255, 0.15);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 
+                        inset 0 0 20px rgba(0, 216, 255, 0.03);
+            z-index: 10;
+            transition: all 0.4s ease;
+        }
+
+        .info:hover {
+            border-color: rgba(0, 216, 255, 0.3);
+            box-shadow: 0 20px 60px rgba(0, 216, 255, 0.08), 
+                        0 20px 50px rgba(0, 0, 0, 0.6);
+        }
+
+        .info h2 {
+            color: #fff;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 25px;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info h2::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 18px;
+            background: #00d8ff;
+            border-radius: 2px;
+            box-shadow: 0 0 10px #00d8ff;
+        }
+
+        .info ul {
+            list-style: none;
+        }
+
+        .info li {
+            padding: 12px 0;
+            color: #b0bac7;
+            font-size: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            display: flex;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+
+        .info li:last-child {
+            border-bottom: none;
+        }
+
+        .info li:hover {
+            color: #fff;
+            transform: translateX(5px);
+        }
+
+        .info li .icon {
+            color: #00ffa6;
+            margin-right: 12px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0, 255, 166, 0.4);
+        }
+
+        /* ===================== */
+        .center {
+            position: absolute;
+            bottom: 60px;
+            right: 80px; /* ย้ายการจัดวางมาทางขวาล่างเพื่อให้ลุคดูเป็นแดชบอร์ดระดับพรีเมียม */
+            text-align: right;
+            z-index: 20;
+        }
+
+        .title {
+            font-size: 54px;
+            font-weight: 900;
+            color: white;
+            letter-spacing: 3px;
+            text-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            line-height: 1.1;
+        }
+
+        .subtitle {
+            margin-top: 12px;
+            color: #00d8ff;
+            font-size: 18px;
+            font-weight: 500;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+
+        .enter {
+            margin-top: 35px;
+            display: inline-block;
+            padding: 18px 50px;
+            border-radius: 50px;
+            background: linear-gradient(135deg, #00d8ff 0%, #00b0ff 100%);
+            color: #04060a;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 15px;
+            letter-spacing: 2px;
+            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+            box-shadow: 0 10px 30px rgba(0, 216, 255, 0.35);
+        }
+
+        .enter:hover {
+            background: linear-gradient(135deg, #00ffa6 0%, #00b0ff 100%);
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 255, 166, 0.45);
+            letter-spacing: 3px;
+        }
+
+        /* ===================== */
+        .scan {
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 216, 255, 0.04), transparent);
+            animation: scan 7s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        @keyframes scan {
+            0% { left: -40%; }
+            100% { left: 130%; }
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 25px;
+            left: 50px;
+            color: #4a5768;
+            font-size: 12px;
+            letter-spacing: 1px;
+            z-index: 10;
+        }
+    </style>
 </head>
 
 <body>
 
-<div class="scan"></div>
-
-<div class="topbar">
-
-<div class="logo">
-
-BK05 DIGITAL TWIN
-
-</div>
-
-<div class="version">
-
-Version 1.0
-
-</div>
-
-</div>
-
-<model-viewer
-
-src="./export/Tast.glb"
-
-camera-controls
-
-auto-rotate
-
-shadow-intensity="1"
-
-environment-image="neutral"
-
-exposure="1.2">
-
-</model-viewer>
-
-<div class="panel">
-
-<h2>Machine Status</h2>
-
-<div class="status">
-
-<span>Machine</span>
-
-<div class="value">READY</div>
-
-</div>
-
-<div class="status">
-
-<span>Temperature</span>
-
-<div class="value">168 °C</div>
-
-</div>
-
-<div class="status">
-
-<span>Motor</span>
-
-<div class="value">Standby</div>
-
-</div>
-
-<div class="status">
-
-<span>Camera</span>
-
-<div class="value">Online</div>
-
-</div>
-
-<div class="status">
-
-<span>Encoder</span>
-
-<div class="value">0 Pulse</div>
-
-</div>
-
-<div class="status">
-
-<span>Safety</span>
-
-<div class="value">NORMAL</div>
-
-</div>
-
-</div>
-
-<div class="info">
-
-<h2>Project Features</h2>
-
-<ul>
-
-<li>✔ Interactive 3D Model</li>
-
-<li>✔ Digital Twin Dashboard</li>
-
-<li>✔ Reverse Engineering</li>
-
-<li>✔ FSM Simulation</li>
-
-<li>✔ Servo Torque Control</li>
-
-<li>✔ Vision Inspection</li>
-
-<li>✔ Temperature Control</li>
-
-<li>✔ Modbus TCP</li>
-
-</ul>
-
-</div>
-
-<div class="center">
-
-<div class="title">
-
-BK05 MACHINE
-
-</div>
-
-<div class="subtitle">
-
-SMD Reel Packing Machine
-
-</div>
-
-<a href="index1.html"
-
-class="enter">
-
-ENTER DIGITAL TWIN
-
-</a>
-
-</div>
-
-<div class="footer">
-
-Developed by Thanpisittha Project | Faculty of Engineering
-
-</div>
+    <div class="scan"></div>
+
+    <div class="topbar">
+        <div class="logo">
+            Demo DIGITAL TWIN
+        </div>
+        <div class="version">
+            Version 1.0
+        </div>
+    </div>
+
+    <model-viewer 
+        src="./export/Machine.glb" 
+        camera-controls 
+        auto-rotate 
+        shadow-intensity="1.5" 
+        environment-image="neutral" 
+        exposure="1.2">
+    </model-viewer>
+
+    <div class="info">
+        <h2>Project Features</h2>
+        <ul>
+            <li><span class="icon">✦</span> Interactive 3D Model</li>
+            <li><span class="icon">✦</span> Digital Twin Dashboard</li>
+            <li><span class="icon">✦</span> Reverse Engineering</li>
+            <li><span class="icon">✦</span> FSM Simulation</li>
+            <li><span class="icon">✦</span> Servo Torque Control</li>
+            <li><span class="icon">✦</span> Vision Inspection</li>
+            <li><span class="icon">✦</span> Temperature Control</li>
+            <li><span class="icon">✦</span> Modbus TCP</li>
+        </ul>
+    </div>
+
+    <div class="center">
+        <div class="title">
+            Demo MACHINE
+        </div>
+        <div class="subtitle">
+            SMD Reel Packing Machine
+        </div>
+        <a href="index1.html" class="enter">
+            ENTER DIGITAL TWIN
+        </a>
+    </div>
+
+    <div class="footer">
+        </div>
 
 </body>
 
