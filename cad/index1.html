@@ -39,10 +39,9 @@
 
     #canvas-wrap{position:relative;background:#06080a}
     canvas{display:block;width:100%;height:100%}
-    .overlay{position:absolute;top:12px;left:12px;background:rgba(17,19,24,0.85);
-      padding:12px 16px;border-radius:6px;border:1px solid var(--border);backdrop-filter:blur(4px);
-      pointer-events:none;display:flex;flex-direction:column;gap:4px}
-    .ov-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:2px}
+    .overlay{position:absolute;top:12px;left:12px;background:rgba(10,12,15,.88);
+      border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:220px}
+    .ov-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
     .ov-state{font-size:20px;font-weight:700;color:var(--teal);line-height:1.1;transition:color .3s}
     .ov-state.inspect-mode{color:var(--amber)}
     .ov-state.replay-title{color:var(--purple)}
@@ -98,8 +97,8 @@
     .tm-panel { background:var(--surface2); border:1px solid var(--border); padding:10px; border-radius:8px; display:flex; flex-direction:column; gap:6px; margin: 0 14px 10px 14px; }
     .tm-tabs { display:flex; gap:4px; }
     .tm-btn { flex:1; padding:6px; font-size:10px; font-weight:bold; background:var(--surface); border:1px solid var(--border); color:var(--muted); border-radius:5px; cursor:pointer; transition:all 0.2s; }
-    .tm-btn.active-live { background:rgba(0,201,167,0.15); color:var(--teal); border-color:var(--teal); }
-    .tm-btn.active-rep { background:rgba(167,139,250,0.15); color:var(--purple); border-color:var(--purple); }
+    .tm-btn.active-live { background:rgba(0, 201, 167, 0.15); color:var(--teal); border-color:var(--teal); }
+    .tm-btn.active-rep { background:rgba(167, 139, 250, 0.15); color:var(--purple); border-color:var(--purple); }
     .tm-slider { width:100%; margin:4px 0; -webkit-appearance:none; background:var(--border); height:4px; border-radius:2px; outline:none; }
     .tm-slider::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--purple); cursor:pointer; }
   </style>
@@ -251,19 +250,19 @@ function reg(role,mesh){
   mesh._origRot = mesh.rotation.clone(); 
 }
 
-// ── 🦾 🛠️ ปรับพิกัดจุดวางเม็ดงานและเลเซอร์ให้ตรงกับแกนโมเดล Machine.glb ของนิวเป๊ะ ๆ ──
-const partGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
-const partMat = new THREE.MeshStandardMaterial({ color: 0xa78bfa, emissive: 0x4c1d95, roughness: 0.2 });
+// ── 🦾 เม็ดงานอิสระลอยตามพิกัดจำลอง ไม่ทำลายกรุ๊ปไฟล์ GLB ──
+const partGeo = new THREE.BoxGeometry(0.04, 0.04, 0.04);
+const partMat = new THREE.MeshStandardMaterial({ color: 0xa78bfa, emissive: 0x2e1065, roughness: 0.2 });
 const partMesh = new THREE.Mesh(partGeo, partMat);
-partMesh.position.set(-0.2, 0.9, 0.03); // ตั้งค่าพิกัดให้บรรจุตรงช่องปากท่อโหลดชิ้นงานพอดี
+partMesh.position.set(-0.25, 0.44, 0.03);
 partMesh.visible = false;
 scene.add(partMesh);
 
-// สร้างท่อนแสงเลเซอร์แนวตั้ง ส่องยิงลงมาจากหัวกล้อง
-const laserGeo = new THREE.CylinderGeometry(0.006, 0.006, 0.5, 8);
+// เส้นลำแสงเลเซอร์สแกนเนอร์
+const laserGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.4, 8);
 const laserMat = new THREE.MeshBasicMaterial({ color: 0x00ff66, transparent: true, opacity: 0.0 });
 const laserMesh = new THREE.Mesh(laserGeo, laserMat);
-laserMesh.position.set(0.12, 0.72, 0.03); // ล็อกพิกัดให้ตรงตำแหน่งหัวเลนส์กล้องโครงเครื่องจักรนิว
+laserMesh.position.set(0.12, 0.65, 0.03);
 scene.add(laserMesh);
 
 // ── Tween System ──
@@ -295,48 +294,42 @@ function playAnim(id){
   const sealMesh = meshMap['sealing_head'];
   const tapeMesh = meshMap['carrier_tape'];
 
-  // เคลียร์เอฟเฟกต์แสงเลเซอร์ปกติในทุกต้นสเตป
   laserMat.opacity = 0.0;
 
   switch(id){
     case 'LOAD_PART':
-      // ข้อ 7: หย่อนเม็ดงานสีม่วงลงมาจากช่องโหลด ดิ่งลงหลุมสายพาน Carrier ข้างล่าง
-      partMesh.position.set(-0.2, 0.9, 0.03);
+      partMesh.position.set(-0.25, 0.8, 0.03);
       partMesh.visible = true;
-      const dropTarget = new THREE.Vector3(-0.2, 0.44, 0.03);
+      const dropTarget = new THREE.Vector3(-0.25, 0.44, 0.03);
       twCustomKey('part_drop', partMesh, partMesh.position, dropTarget, 0.8/S);
       break;
 
     case 'VISION':
-      // ข้อ 8: เปิดแสงเลเซอร์สีเขียวกะพริบยิงลงมาจากกล้อง 1 เพื่อสแกนเม็ดงาน
-      laserMesh.position.set(0.12, 0.72, 0.03); 
+      laserMesh.position.set(0.12, 0.65, 0.03); 
       laserMat.color.setHex(0x00ff66);
-      laserMat.opacity = 0.65;
+      laserMat.opacity = 0.7;
       break;
 
     case 'FEED_CARRIER':
-      // ข้อ 10: สายพานเลื่อน และมอเตอร์ Roll_1 หมุนขับสายพานไปข้างหน้า
-      twRot('roller_feed', -Math.PI * 2.5, 1.2/S, 'x'); 
-      twRot('feeder_block', -Math.PI * 2.5, 1.2/S, 'z'); 
+      twRot('roller_feed', -Math.PI * 2.0, 1.2/S, 'x'); 
+      twRot('feeder_block', -Math.PI * 2.0, 1.2/S, 'z'); 
 
       if(tapeMesh && origPos['carrier_tape']) {
         tapeMesh.position.copy(origPos['carrier_tape']);
-        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0.25, 0, 0));
+        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0.2, 0, 0));
         twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 1.2/S, () => {
           tapeMesh.position.copy(origPos['carrier_tape']);
         });
       }
-      // ลากเลื่อนพิกัดของเม็ดงานสีม่วงตามความยาวสายพานไปด้วยขนานกัน
       if(partMesh.visible) {
-        const partNext = partMesh.position.clone().add(new THREE.Vector3(0.25, 0, 0));
+        const partNext = partMesh.position.clone().add(new THREE.Vector3(0.2, 0, 0));
         twCustomKey('part_move', partMesh, partMesh.position, partNext, 1.2/S);
       }
       break;
 
     case 'SEAL_PROCESS':
-      // ข้อ 14: หัวกระบอกสูบสับซีลความร้อนกดลงและยกตัวคืนพิกัดแท่น
       if(sealMesh && origPos['sealing_head']){
-        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.22, 0));
+        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.2, 0));
         twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 0.6/S, () => {
            twCustomKey('sealing_up', sealMesh, sealMesh.position, origPos['sealing_head'], 0.6/S);
         });
@@ -344,19 +337,17 @@ function playAnim(id){
       break;
 
     case 'VISION_QC':
-      // ข้อ 15: ย้ายท่อนแสงเลเซอร์เปลี่ยนเป็นสีฟ้ากะพริบยิงลงมาจากกล้อง 2 เพื่อตรวจรอยตัดซีล
-      laserMesh.position.set(0.42, 0.72, 0.03); // ย้ายตำแหน่งมาเลนส์กล้อง QC ตัวขวา
+      laserMesh.position.set(0.4, 0.65, 0.03); 
       laserMat.color.setHex(0x00ffff);
-      laserMat.opacity = 0.65;
+      laserMat.opacity = 0.7;
       break;
 
     case 'TAKEUP_REEL':
-      // ข้อ 16: ผ่านเกณฑ์เรียบร้อย ม้วนเก็บขึ้นล้อ Roll_2 (สีแดง) ปลายทาง
-      twRot('roller_blue', Math.PI * 2.5, 1.0/S, 'x'); 
+      twRot('roller_blue', Math.PI * 2.0, 1.0/S, 'x'); 
       if(partMesh.visible) {
-        const rollTarget = partMesh.position.clone().add(new THREE.Vector3(0.4, 0.15, 0));
+        const rollTarget = partMesh.position.clone().add(new THREE.Vector3(0.3, 0.15, 0));
         twCustomKey('part_to_reel', partMesh, partMesh.position, rollTarget, 1.0/S, () => {
-           partMesh.visible = false; // ชิ้นงานม้วนเข้ารอบล้อใหญ่ไปแล้ว สั่งซ่อนโมเดล
+           partMesh.visible = false;
         });
       }
       break;
@@ -612,17 +603,8 @@ function initWebSocket() {
 
       if (current !== sys.current_state) {
         document.querySelectorAll('.si.active').forEach(e => { e.classList.remove('active', 'inspecting', 'visited'); });
-        
-        const oldIdx = STATES.findIndex(x => x.id === current);
-        const newIdx = STATES.findIndex(x => x.id === sys.current_state);
-        if(newIdx > oldIdx && oldIdx > -1) {
-           for(let k=0; k<=newIdx; k++) {
-              const item = document.getElementById('si_' + STATES[k].id);
-              if(item) item.classList.add('visited');
-           }
-        }
-
         current = sys.current_state;
+        
         const el = document.getElementById('si_' + current);
         const s = STATES.find(x => x.id === current);
         
@@ -676,6 +658,34 @@ function initWebSocket() {
 }
 
 initWebSocket();
+
+// ==================================================
+// 🔄 RENDER LOOP (ของนิว 100%)
+// ==================================================
+let lastTime = 0;
+function animLoop(now) {
+  requestAnimationFrame(animLoop);
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+
+  tweens.forEach(tw => {
+    if(!tw.elapsed) tw.elapsed = 0;
+    tw.elapsed += dt * speedMul;
+    const currentDuration = tw.dur || 1.0;
+    const progress = Math.min(tw.elapsed / currentDuration, 1.0);
+    tw.update(progress);
+  });
+
+  controls.update();
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(animLoop);
+
+window.addEventListener('resize', () => {
+  camera.aspect = container.clientWidth/container.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(container.clientWidth, container.clientHeight);
+});
 </script>
 </body>
 </html>
