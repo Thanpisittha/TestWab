@@ -94,7 +94,6 @@
     .le .ts{color:#4b5563;margin-right:5px}
     .le.info .ev{color:var(--teal)}.le.warn .ev{color:var(--amber)}.le.err .ev{color:var(--red)}.le.sys .ev{color:var(--purple)}
 
-    /* ⏳ สไตล์ปุ่มและแผงควบคุม Time Machine */
     .tm-panel { background:var(--surface2); border:1px solid var(--border); padding:10px; border-radius:8px; display:flex; flex-direction:column; gap:6px; margin: 0 14px 10px 14px; }
     .tm-tabs { display:flex; gap:4px; }
     .tm-btn { flex:1; padding:6px; font-size:10px; font-weight:bold; background:var(--surface); border:1px solid var(--border); color:var(--muted); border-radius:5px; cursor:pointer; transition:all 0.2s; }
@@ -127,7 +126,6 @@
 </div>
 
 <div class="panel">
-  <!-- ⏳ แผงควบคุมระบบ Replay ไทม์แมชชีน ดึงประวัติ SQL -->
   <div class="sec-title" style="padding-top:14px">⏳ Digital Twin Time Machine</div>
   <div class="tm-panel">
     <div class="tm-tabs">
@@ -198,26 +196,25 @@ const PART_NAMES = {
   sealing_head: 'Sealing', 
 };
 
-// ── 📋 ลำดับสเตปใหม่ภาษาไทยอิงตามแผ่นผังกระบวนการล่าสุด 100% ──
+// ── 📋 ปรับรายชื่อลำดับ 16 สเตปและคำอธิบายภาษาไทยตามเงื่อนไขใหม่ของนิวเป๊ะ ๆ ──
 const STATES = [
-  {id:'LOAD_CARRIER',          action:'LOAD carrier-cover-tape / โหลด Carrier & Cover Tape', isCheck:false},
-  {id:'INDEX_CARRIER',         action:'INDEX carrier-tape / Motor 1 feed ไปตำแหน่งแรก', isCheck:false},
-  {id:'POWER_ON',              action:'POWER_ON / เปิดหน้าจอระบบระบบเริ่มรัน', isCheck:false},
-  {id:'SET_PARAMS',            action:'SET_PARAMS / กำหนดความเร็ว ความร้อน แรงดัน', isCheck:false},
-  {id:'SENSOR_CHECK_CARRIER',   action:'[CHECK] SENSOR_CHECK_CARRIER / เซนเซอร์ตรวจ Carrier?', isCheck:true},
-  {id:'READY',                 action:'READY / แท่นเครื่องพร้อมประมวลผล', isCheck:false},
-  {id:'LOAD_PART',             action:'LOAD_PART / หย่อนชิ้นส่วนลงหลุมเทป', isCheck:false},
-  {id:'VISION',                action:'[CHECK] VISION / กล้องตรวจเช็คความถูกต้อง', isCheck:true},
-  {id:'CHECK_TEMP',            action:'[CHECK] CHECK_TEMP / อุณหภูมิความร้อนหัวซีลคงที่ไหม?', isCheck:true},
-  {id:'FEED_CARRIER',          action:'FEED_carrier / ป้อนสายพานเทปไปสเตปถัดไป', isCheck:false},
-  {id:'CAMERA1_COUNT',         action:'CAMERA1_COUNT / กล้องตรวจนับเจอชิ้นงานจริง', isCheck:false},
-  {id:'ENCODER_COUNT',         action:'ENCODER_COUNT / เอนโค้ดเดอร์นับระยะพิตช์เคลื่อนจริง', isCheck:false},
-  {id:'COUNT_CHECK',           action:'[CHECK] COUNT_CHECK / camera1_count == encoder_count?', isCheck:true},
-  {id:'TARGET_CHECK',          action:'[CHECK] count == target? / ตรวจสอบยอดครบจำนวนม้วนหรือยัง', isCheck:true},
-  {id:'SEAL',                  action:'SEAL / ซีลฝาปิด (Heat / Pressure)', isCheck:false},
-  {id:'VISION_QC',             action:'[CHECK] VISION_QC / กล้อง 2 ตรวจเช็ครอยตัดซีลเทป', isCheck:true},
-  {id:'TAKEUP_REEL',           action:'TAKEUP_REEL / ม้วนเก็บขึ้นล้อ Roll_2', isCheck:false},
-  {id:'ALARM',                 action:'🚨 ALARM / ระบบขัดข้อง สั่งเบรกเครื่องจักรหยุดฉุกเฉิน!', isCheck:false}
+  {id:'LOAD_CARRIER',          action:'โหลด Carrier & Cover Tape เข้าที่เฉยๆ', isCheck:false},
+  {id:'INDEX_CARRIER',         action:'จัด Carrier & Coverให้อยู่ตำแหน่งเพื่อเริ่มงาน', isCheck:false},
+  {id:'POWER_ON',              action:'เปิดเครื่อง สแตนบาย Heater/กล้อง/เซนเซอร์', isCheck:false},
+  {id:'SET_PARAMS',            action:'Set ค่าพารามิเตอร์ต่างๆ ของเครื่องจักร', isCheck:false},
+  {id:'SENSOR_CHECK_CARRIER',   action:'[CHECK] เซนเซอร์ตรวจสอบว่า Carrier อยู่ตำแหน่งจริงมั้ย', isCheck:true},
+  {id:'READY',                 action:'ถ้ามีชิ้นงานก็เริ่มต้นระบบได้เลย', isCheck:false},
+  {id:'LOAD_PART',             action:'ทำการใส่ชิ้นงานลงในหลุม Carrier', isCheck:false},
+  {id:'VISION',                action:'[CHECK] กล้อง 1 ตรวจสอบความถูกต้องของชิ้นงาน', isCheck:true},
+  {id:'CHECK_TEMP',            action:'[CHECK] เช็คอุณหภูมิความร้อนหัวซีลถึงค่าที่กำหนดยัง', isCheck:true},
+  {id:'FEED_CARRIER',          action:'Carrier ขยับเลื่อน และ Roll_1 หมุนขับสายพาน', isCheck:false},
+  {id:'COUNT_PROCESS',         action:'นับชิ้นงานโดยกล้อง 1 และ Encoder ตามระยะพิตช์', isCheck:false},
+  {id:'COUNT_CHECK',           action:'[CHECK] ตรวจสอบความถูกต้องว่าค่านับตรงกันมั้ย', isCheck:true},
+  {id:'COUNT_ACCUMULATE',      action:'ถ้าจำนวนตรงกัน สั่งบันทึกนับบวกขึ้น 1 ชิ้น', isCheck:false},
+  {id:'SEAL_PROCESS',          action:'หัวซีลความร้อน (Seal) กดลงและยกตัวคืนที่', isCheck:false},
+  {id:'VISION_QC',             action:'[CHECK] กล้อง 2 ตรวจสอบความถูกต้องของการซีล', isCheck:true},
+  {id:'TAKEUP_REEL',           action:'ถ้าผ่านเกณฑ์ สั่ง Roll_2 หมุนม้วนเทปเก็บงาน', isCheck:false},
+  {id:'ALARM',                 action:'🚨 ALARM / ตรวจพบจุดขัดข้อง สั่งเบรกเครื่องจักรหยุดฉุกเฉิน!', isCheck:false}
 ];
 
 window.speedMul = 1;
@@ -277,16 +274,15 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// ── 🎬 🛠️ แอนิเมชันเฉพาะของแผนผังชุดใหม่แบบเคลียร์คลีน 100% ──
+// ── 🎬 แอนิเมชัน 3D บังคับการหมุนของเกียร์แต่ละจุดตรงสเตปเงื่อนไขใหม่ ──
 function playAnim(id){
   const S = speedMul;
   const sealMesh = meshMap['sealing_head'];
   const tapeMesh = meshMap['carrier_tape'];
 
   switch(id){
-    case 'INDEX_CARRIER':
     case 'FEED_CARRIER':
-      // ขยับฟีดล้อและเลื่อนสายพานเทปไปตามจังหวะผังตัวใหม่
+      // สเตป 10: Roll_1 หมุนขับสายพานเฉพาะจังหวะที่เลื่อนชิ้นงานเข้าจุดนับชิ้นเท่านั้น!
       twRot('roller_feed', -Math.PI * 2.5, 1.0/S, 'x'); 
       twRot('feeder_block', -Math.PI * 2.5, 1.0/S, 'z'); 
 
@@ -299,8 +295,8 @@ function playAnim(id){
       }
       break;
 
-    case 'SEAL':
-      // แอนิเมชันหัวกระบอกสูบสับกดลงซีลความร้อนและเด้งขึ้นคืนที่
+    case 'SEAL_PROCESS':
+      // สเตป 14: หัวซีลความร้อนสับกดลงและยกขึ้นเคลียร์ตัวเองในรอบเดียว
       if(sealMesh && origPos['sealing_head']){
         const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.5, 0));
         twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 0.5/S, () => {
@@ -310,12 +306,12 @@ function playAnim(id){
       break;
 
     case 'TAKEUP_REEL':
-      // หมุนม้วนเก็บขึ้นล้อชุดที่สอง (Roll_2)
+      // สเตป 16: ผ่านเกณฑ์ทั้งหมดแล้ว Roll_2 ถึงจะหมุนม้วนเก็บชิ้นงานปลายทาง
       twRot('roller_blue', Math.PI * 2.5, 1.0/S, 'x'); 
       break;
 
     case 'LOAD_CARRIER':
-      // เคลียร์ตำแหน่งหัวและชิ้นงานกลับคืนค่าเริ่มต้น
+      // เคลียร์พิกัดกลับสู่แกนระนาบเริ่มต้น
       ret('carrier_tape', 0.25/S); 
       ret('sealing_head', 0.25/S);
       break;
@@ -390,7 +386,7 @@ new GLTFLoader().load('./export/Machine.glb', gltf=>{
   addLog(`System Core Loaded Successfully`,'info');
 },null,err=>addLog('GLB error: '+err.message,'err'));
 
-// ── UI Generation ──
+// ── UI Flow Generation ──
 const sl=document.getElementById('statesList');
 STATES.forEach(s=>{
   const el=document.createElement('div'); el.className='si'; el.id='si_'+s.id;
@@ -406,7 +402,7 @@ window.addLog = function(msg,type='info'){
 }
 
 // ==================================================
-// ⚙️ FSM CONTROL SYNC LAYER (ขึ้นตรงกับ Python 100%)
+// ⚙️ FSM CONTROL SYNC LAYER (ขึ้นตรงกับ Python)
 // ==================================================
 let current='READY', running=false, isSemiAutoMode = false, stepAllowed = false, cycles=0;
 
@@ -631,7 +627,7 @@ initWebSocket();
 // ==================================================
 let lastTime = 0;
 function animLoop(now) {
-  requestAnimationFrame(animLoop);
+  requestAnimationFrame(animate);
   const dt = (now - lastTime) / 1000;
   lastTime = now;
 
