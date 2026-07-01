@@ -97,8 +97,8 @@
     .tm-panel { background:var(--surface2); border:1px solid var(--border); padding:10px; border-radius:8px; display:flex; flex-direction:column; gap:6px; margin: 0 14px 10px 14px; }
     .tm-tabs { display:flex; gap:4px; }
     .tm-btn { flex:1; padding:6px; font-size:10px; font-weight:bold; background:var(--surface); border:1px solid var(--border); color:var(--muted); border-radius:5px; cursor:pointer; transition:all 0.2s; }
-    .tm-btn.active-live { background:rgba(0, 201, 167, 0.15); color:var(--teal); border-color:var(--teal); }
-    .tm-btn.active-rep { background:rgba(167, 139, 250, 0.15); color:var(--purple); border-color:var(--purple); }
+    .tm-btn.active-live { background:rgba(0,201,167,0.15); color:var(--teal); border-color:var(--teal); }
+    .tm-btn.active-rep { background:rgba(167,139,250,0.15); color:var(--purple); border-color:var(--purple); }
     .tm-slider { width:100%; margin:4px 0; -webkit-appearance:none; background:var(--border); height:4px; border-radius:2px; outline:none; }
     .tm-slider::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--purple); cursor:pointer; }
   </style>
@@ -196,6 +196,7 @@ const PART_NAMES = {
   sealing_head: 'Sealing', 
 };
 
+// ── 📋 รายชื่อลำดับ 16 สเตปและคำอธิบายภาษาไทยตามเงื่อนไขใหม่ของนิวเป๊ะ ๆ ──
 const STATES = [
   {id:'LOAD_CARRIER',          action:'โหลด Carrier & Cover Tape เข้าที่เฉยๆ', isCheck:false},
   {id:'INDEX_CARRIER',         action:'จัด Carrier & Cover ให้อยู่ในตำแหน่งเพื่อจะเริ่มการทำงานเฉย', isCheck:false},
@@ -233,15 +234,6 @@ controls.enableDamping = true;
 scene.add(new THREE.AmbientLight(0xffffff,1.2));
 const dl = new THREE.DirectionalLight(0xffffff,1.5); dl.position.set(4,6,4); scene.add(dl);
 
-function resize(){
-  const p=canvas.parentElement;
-  renderer.setSize(p.clientWidth,p.clientHeight,false);
-  camera.aspect=p.clientWidth/p.clientHeight;
-  camera.updateProjectionMatrix();
-}
-resize();
-new ResizeObserver(resize).observe(canvas.parentElement);
-
 // ── Registry ──
 const meshMap={}, origPos={};
 function reg(role,mesh){
@@ -250,7 +242,7 @@ function reg(role,mesh){
   mesh._origRot = mesh.rotation.clone(); 
 }
 
-// ── 🦾 เม็ดงานอิสระลอยตามพิกัดจำลอง ไม่ทำลายกรุ๊ปไฟล์ GLB ──
+// ── 🦾 เม็ดงานอิสระและเส้นแสงเลเซอร์ตรวจสอบเพิ่มเติม (Phase 7 UI) ──
 const partGeo = new THREE.BoxGeometry(0.04, 0.04, 0.04);
 const partMat = new THREE.MeshStandardMaterial({ color: 0xa78bfa, emissive: 0x2e1065, roughness: 0.2 });
 const partMesh = new THREE.Mesh(partGeo, partMat);
@@ -258,7 +250,6 @@ partMesh.position.set(-0.25, 0.44, 0.03);
 partMesh.visible = false;
 scene.add(partMesh);
 
-// เส้นลำแสงเลเซอร์สแกนเนอร์
 const laserGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.4, 8);
 const laserMat = new THREE.MeshBasicMaterial({ color: 0x00ff66, transparent: true, opacity: 0.0 });
 const laserMesh = new THREE.Mesh(laserGeo, laserMat);
@@ -288,7 +279,7 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// ── 🎬 Animation Mapping ──
+// ── 🎬 Animation Mapping (แก้ไขลอจิกเลื่อนชิ้นงาน ไม่ทำลาย Matrix โครงเครื่องจักรนิว) ──
 function playAnim(id){
   const S = speedMul;
   const sealMesh = meshMap['sealing_head'];
@@ -311,18 +302,13 @@ function playAnim(id){
       break;
 
     case 'FEED_CARRIER':
+      // 🛠️ ขยับหมุนเกียร์เฟืองขับเคลื่อนตามจังหวะปกติ
       twRot('roller_feed', -Math.PI * 2.0, 1.2/S, 'x'); 
       twRot('feeder_block', -Math.PI * 2.0, 1.2/S, 'z'); 
 
-      if(tapeMesh && origPos['carrier_tape']) {
-        tapeMesh.position.copy(origPos['carrier_tape']);
-        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0.2, 0, 0));
-        twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 1.2/S, () => {
-          tapeMesh.position.copy(origPos['carrier_tape']);
-        });
-      }
+      // ขยับเฉพาะตัวเม็ดงานอิสระสีม่วงให้เลื่อนไหลไปตามรางสายพานออโต้
       if(partMesh.visible) {
-        const partNext = partMesh.position.clone().add(new THREE.Vector3(0.2, 0, 0));
+        const partNext = partMesh.position.clone().add(new THREE.Vector3(0.15, 0, 0));
         twCustomKey('part_move', partMesh, partMesh.position, partNext, 1.2/S);
       }
       break;
@@ -360,11 +346,11 @@ function playAnim(id){
   }
 }
 
-// ── Render Loop ──
+// ── Render Loop (คลีนลูปซ้ำซ้อนออก เหลือลูปหลักรันลื่นไหลตัวเดียว) ──
 const clock = new THREE.Clock();
 function animate(){
   requestAnimationFrame(animate);
-  const dt=clock.getDelta();
+  const dt = clock.getDelta() * window.speedMul;
   controls.update();
   
   for(let i=tweens.length-1;i>=0;i--){
@@ -458,10 +444,10 @@ window.switchMode = function(mode) {
 }
 
 window.updateSpeedSlider = function(val) {
-  speedMul = +val;
+  window.speedMul = +val;
   document.getElementById('sval').textContent = val + '×';
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ action: "SPEED", value: speedMul }));
+    ws.send(JSON.stringify({ action: "SPEED", value: window.speedMul }));
   }
 }
 
@@ -659,32 +645,12 @@ function initWebSocket() {
 
 initWebSocket();
 
-// ==================================================
-// 🔄 RENDER LOOP (ของนิว 100%)
-// ==================================================
-let lastTime = 0;
-function animLoop(now) {
-  requestAnimationFrame(animLoop);
-  const dt = (now - lastTime) / 1000;
-  lastTime = now;
-
-  tweens.forEach(tw => {
-    if(!tw.elapsed) tw.elapsed = 0;
-    tw.elapsed += dt * speedMul;
-    const currentDuration = tw.dur || 1.0;
-    const progress = Math.min(tw.elapsed / currentDuration, 1.0);
-    tw.update(progress);
-  });
-
-  controls.update();
-  renderer.render(scene,camera);
-}
-requestAnimationFrame(animLoop);
-
+// แก้ไขพิกัดสัดส่วนการรีไซส์หน้าจอออโต้แบบถูกต้อง
 window.addEventListener('resize', () => {
-  camera.aspect = container.clientWidth/container.clientHeight;
+  const p = canvas.parentElement;
+  camera.aspect = p.clientWidth / p.clientHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setSize(p.clientWidth, p.clientHeight);
 });
 </script>
 </body>
