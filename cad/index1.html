@@ -39,9 +39,10 @@
 
     #canvas-wrap{position:relative;background:#06080a}
     canvas{display:block;width:100%;height:100%}
-    .overlay{position:absolute;top:12px;left:12px;background:rgba(10,12,15,.88);
-      border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:220px}
-    .ov-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+    .overlay{position:absolute;top:12px;left:12px;background:rgba(17,19,24,0.85);
+      padding:12px 16px;border-radius:6px;border:1px solid var(--border);backdrop-filter:blur(4px);
+      pointer-events:none;display:flex;flex-direction:column;gap:4px}
+    .ov-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:2px}
     .ov-state{font-size:20px;font-weight:700;color:var(--teal);line-height:1.1;transition:color .3s}
     .ov-state.inspect-mode{color:var(--amber)}
     .ov-state.replay-title{color:var(--purple)}
@@ -196,18 +197,17 @@ const PART_NAMES = {
   sealing_head: 'Sealing', 
 };
 
-// ── 📋 รายชื่อลำดับ 16 สเตปและคำอธิบายภาษาไทยตามเงื่อนไขใหม่ของนิวเป๊ะ ๆ ──
 const STATES = [
   {id:'LOAD_CARRIER',          action:'โหลด Carrier & Cover Tape เข้าที่เฉยๆ', isCheck:false},
   {id:'INDEX_CARRIER',         action:'จัด Carrier & Cover ให้อยู่ในตำแหน่งเพื่อจะเริ่มการทำงานเฉย', isCheck:false},
   {id:'POWER_ON',              action:'เริ่มเปิดเครื่อง ทุกอย่างจะถูกเปิดเพื่อสแตนบายเฉย', isCheck:false},
   {id:'SET_PARAMS',            action:'Set ค่าต่างๆ พารามิเตอร์ของระบบ', isCheck:false},
-  {id:'SENSOR_CHECK_CARRIER',   action:'[CHECK] เซนเซอร์มีการตรวจสอบว่า Carrier อยู่ตำแหน่งจริงมั้ย', isCheck:true},
+  {id:'SENSOR_CHECK_CARRIER',   action:'[CHECK] เซนเซอร์ตรวจสอบว่า Carrier อยู่ตำแหน่งจริงมั้ย', isCheck:true},
   {id:'READY',                 action:'ถ้ามี Carrier ก็เริ่มต้นระบบได้เลย', isCheck:false},
-  {id:'LOAD_PART',             action:'มีการใส่ชิ้นงานลงใน Carrier', isCheck:false},
+  {id:'LOAD_PART',             action:'มีการใส่ชิ้นส่วนลงใน Carrier', isCheck:false},
   {id:'VISION',                action:'[CHECK] พอใส่เสร็จกล้อง 1 ก็จะตรวจสอบความถูกต้องของชิ้นงาน', isCheck:true},
   {id:'CHECK_TEMP',            action:'[CHECK] ถ้าถูกแล้วก็จะทำการเช็คอุณหภูมิว่าถึงค่าที่กำหนดยัง', isCheck:true},
-  {id:'FEED_CARRIER',          action:'ถ้าถึงแล้ว Carrier ก็จะขยับ และ Roll_1 ก็จะหมุนตอนเลื่อนนี่แหละ', isCheck:false},
+  {id:'FEED_CARRIER',          action:'Carrier ขยับเลื่อน และ Roll_1 หมุนขับสายพาน', isCheck:false},
   {id:'COUNT_PROCESS',         action:'จะมีการนับชิ้นงานโดยกล้อง 1 และ Encoder ที่นับตามระยะพิตช์', isCheck:false},
   {id:'COUNT_CHECK',           action:'[CHECK] ตรวจสอบว่าค่านับตรงกับที่เช็คมั้ย', isCheck:true},
   {id:'COUNT_ACCUMULATE',      action:'ถ้าตรงก็นับบวกสะสมขึ้นเพิ่ม 1 ชิ้น', isCheck:false},
@@ -244,12 +244,26 @@ resize();
 new ResizeObserver(resize).observe(canvas.parentElement);
 
 // ── Registry ──
-const meshMap={}, origPos={}, origMat={};
+const meshMap={}, origPos={};
 function reg(role,mesh){
   meshMap[role]=mesh;
   origPos[role]=mesh.position.clone();
   mesh._origRot = mesh.rotation.clone(); 
 }
+
+// ── 🦾 สร้างวัตถุ 3D ชิ้นส่วนอิเล็กทรอนิกส์ และเส้นแสงเลเซอร์ตรวจสอบเพิ่มเติม ──
+const partGeo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+const partMat = new THREE.MeshStandardMaterial({ color: 0xa78bfa, emissive: 0x3b0764, roughness: 0.2 });
+const partMesh = new THREE.Mesh(partGeo, partMat);
+partMesh.position.set(0, 1.5, 0); // ซ่อนไว้ด้านบนแท่นสแตนบาย
+partMesh.visible = false;
+scene.add(partMesh);
+
+const laserGeo = new THREE.CylinderGeometry(0.01, 0.01, 1.2, 8);
+const laserMat = new THREE.MeshBasicMaterial({ color: 0x00ff66, transparent: true, opacity: 0.0 });
+const laserMesh = new THREE.Mesh(laserGeo, laserMat);
+laserMesh.position.set(0.5, 0.8, 0); // ตั้งไว้ตรงพิกัดกล้องตรวจจับชิ้นงาน
+scene.add(laserMesh);
 
 // ── Tween System ──
 const tweens=[];
@@ -274,29 +288,51 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// ── 🎬 แอนิเมชัน 3D คุมตามจังหวะเงื่อนไขทางกลตัวใหม่ ──
+// ── 🎬 Animation Mapping ──
 function playAnim(id){
   const S = speedMul;
   const sealMesh = meshMap['sealing_head'];
   const tapeMesh = meshMap['carrier_tape'];
 
+  // ปิดเอฟเฟกต์แสงเลเซอร์สแกนในสเตปปกติก่อน
+  laserMat.opacity = 0.0;
+
   switch(id){
+    case 'LOAD_PART':
+      // สเตป 7: หย่อนเม็ดงานสีม่วงลงมาจากกล่องป้อนฟีดแนวตั้งลงหลุมสายพาน Carrier
+      partMesh.position.set(0, 1.2, -0.2);
+      partMesh.visible = true;
+      const dropTarget = new THREE.Vector3(0, 0.45, -0.2);
+      twCustomKey('part_drop', partMesh, partMesh.position, dropTarget, 0.8/S);
+      break;
+
+    case 'VISION':
+      // สเตป 8: เปิดแสงเลเซอร์สีเขียวกะพริบยิงลงมาจากตัวกล้อง 1 เพื่อตรวจชิ้นงาน
+      laserMat.color.setHex(0x00ff66);
+      laserMat.opacity = 0.6;
+      break;
+
     case 'FEED_CARRIER':
-      // ข้อ 10: Carrier ขยับเลื่อน และ Roll_1 หมุนขับสายพานพร้อมกันช่วงนี้เท่านั้น
+      // สเตป 10: สายพานเทป Carrier ขยับ และมอเตอร์ Roll_1 หมุนขับเคลื่อนไปข้างหน้า
       twRot('roller_feed', -Math.PI * 2.5, 1.2/S, 'x'); 
       twRot('feeder_block', -Math.PI * 2.5, 1.2/S, 'z'); 
 
       if(tapeMesh && origPos['carrier_tape']) {
         tapeMesh.position.copy(origPos['carrier_tape']);
-        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0, 0, 2));
+        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0, 0, 1.5));
         twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 1.2/S, () => {
           tapeMesh.position.copy(origPos['carrier_tape']);
         });
       }
+      // ขยับเลื่อนพิกัดของเม็ดงานตามสายพานไปด้วย
+      if(partMesh.visible) {
+        const partNext = partMesh.position.clone().add(new THREE.Vector3(0.4, 0, 0));
+        twCustomKey('part_move', partMesh, partMesh.position, partNext, 1.2/S);
+      }
       break;
 
     case 'SEAL_PROCESS':
-      // ข้อ 14: หัวสูบกดลงและยกกลับแช่ความร้อนทันที จบสเตปนุ่มนวล
+      // สเตป 14: หัวกระบอกสูบสับซีลความร้อนกดลงและยกตัวคืนตำแหน่ง
       if(sealMesh && origPos['sealing_head']){
         const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.5, 0));
         twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 0.6/S, () => {
@@ -305,14 +341,28 @@ function playAnim(id){
       }
       break;
 
+    case 'VISION_QC':
+      // สเตป 15: เปิดแสงเลเซอร์สีฟ้ากะพริบยิงลงมาจากตัวกล้อง 2 เพื่อเช็คคุณภาพรอยซีล
+      laserMat.color.setHex(0x00ffff);
+      laserMesh.position.set(0.8, 0.8, 0); // ขยับเลเซอร์มาจุดกล้อง QC ตัวที่สอง
+      laserMat.opacity = 0.6;
+      break;
+
     case 'TAKEUP_REEL':
-      // ข้อ 16: ผ่าน QC ปลายทางแล้ว สั่งให้ล้อ Roll_2 ม้วนเก็บงาน
+      // สเตป 16: ผ่านเกณฑ์ทั้งหมดแล้ว สั่งให้ล้อ Roll_2 หมุนม้วนเก็บงานชิ้นนี้ปลายทาง
       twRot('roller_blue', Math.PI * 2.5, 1.0/S, 'x'); 
+      if(partMesh.visible) {
+        const rollTarget = partMesh.position.clone().add(new THREE.Vector3(0.8, 0.2, 0));
+        twCustomKey('part_to_reel', partMesh, partMesh.position, rollTarget, 1.0/S, () => {
+           partMesh.visible = false; // ม้วนเข้าล้อเก็บงานไปแล้ว ซ่อนโมเนลชิ้นงาน
+        });
+      }
       break;
 
     case 'LOAD_CARRIER':
       ret('carrier_tape', 0.25/S); 
       ret('sealing_head', 0.25/S);
+      partMesh.visible = false;
       break;
   }
 }
@@ -326,8 +376,6 @@ function animate(){
   
   for(let i=tweens.length-1;i>=0;i--){
     const t=tweens[i]; t.elapsed+=dt;
-    
-    // 🔥 ฟิกแก้บัค Visual Timing: สเกลความยาวตามตัวหารจริงของสเตปนั้น ไม่ใช้ 1.0 วินาทีคงที่
     const currentDuration = t.dur || 1.0;
     const p=Math.min(t.elapsed/currentDuration,1), ep=ease(p);
     
@@ -463,6 +511,7 @@ window.fsmReset = function(){
   });
   document.getElementById('ovState').textContent = 'READY';
   current = 'READY';
+  partMesh.visible = false;
 };
 
 // ==================================================
@@ -473,7 +522,6 @@ let twinAppMode = "LIVE";
 let historicalTimeline = [];
 
 window.switchTwinMode = function(targetMode) {
-  navigator.vibrate = navigator.vibrate || function(){};
   twinAppMode = targetMode;
   const liveBtn = document.getElementById("tmLiveBtn");
   const repBtn = document.getElementById("tmRepBtn");
@@ -561,8 +609,17 @@ function initWebSocket() {
 
       if (current !== sys.current_state) {
         document.querySelectorAll('.si.active').forEach(e => { e.classList.remove('active', 'inspecting', 'visited'); });
-        current = sys.current_state;
         
+        const oldIdx = STATES.findIndex(x => x.id === current);
+        const newIdx = STATES.findIndex(x => x.id === sys.current_state);
+        if(newIdx > oldIdx && oldIdx > -1) {
+           for(let k=0; k<=newIdx; k++) {
+              const item = document.getElementById('si_' + STATES[k].id);
+              if(item) item.classList.add('visited');
+           }
+        }
+
+        current = sys.current_state;
         const el = document.getElementById('si_' + current);
         const s = STATES.find(x => x.id === current);
         
@@ -577,7 +634,10 @@ function initWebSocket() {
         document.getElementById('ovState').classList.toggle('inspect-mode', (s?.isCheck && isSemiAutoMode));
         
         const dot = document.getElementById('hdot'), hs = document.getElementById('hstatus');
-        if (!running) {
+        if (current === 'ALARM') {
+          dot.className = 'hdot'; hs.textContent = 'STOPPED (ALARM TRIPPED)';
+          document.getElementById('ovState').textContent = "🚨 ALARM CRITICAL";
+        } else if (!running) {
           dot.className = 'hdot'; hs.textContent = 'Idle';
         } else if (s && s.isCheck && isSemiAutoMode) {
           dot.className = 'hdot inspect'; hs.textContent = 'Awaiting OK / NG Decision...';
@@ -613,6 +673,34 @@ function initWebSocket() {
 }
 
 initWebSocket();
+
+// ==================================================
+// 🔄 RENDER LOOP (ของนิว 100%)
+// ==================================================
+let lastTime = 0;
+function animLoop(now) {
+  requestAnimationFrame(animLoop);
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+
+  tweens.forEach(tw => {
+    if(!tw.elapsed) tw.elapsed = 0;
+    tw.elapsed += dt * speedMul;
+    const currentDuration = tw.dur || 1.0;
+    const progress = Math.min(tw.elapsed / currentDuration, 1.0);
+    tw.update(progress);
+  });
+
+  controls.update();
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(animLoop);
+
+window.addEventListener('resize', () => {
+  camera.aspect = container.clientWidth/container.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(container.clientWidth, container.clientHeight);
+});
 </script>
 </body>
 </html>
