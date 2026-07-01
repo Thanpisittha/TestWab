@@ -250,20 +250,6 @@ function reg(role,mesh){
   mesh._origRot = mesh.rotation.clone(); 
 }
 
-// ── 🦾 💡 วัตถุจำลองตกแต่ง Phase 7 (ตั้งค่าแบบโปร่งใสแยกส่วน ไม่ผูกแกน ไม่กวนใจโมเดลหลัก) ──
-const partGeo = new THREE.BoxGeometry(0.04, 0.04, 0.04);
-const partMat = new THREE.MeshStandardMaterial({ color: 0xa78bfa, emissive: 0x2e1065, roughness: 0.2 });
-const partMesh = new THREE.Mesh(partGeo, partMat);
-partMesh.position.set(-0.25, 0.44, 0.03);
-partMesh.visible = false;
-scene.add(partMesh);
-
-const laserGeo = new THREE.CylinderGeometry(0.004, 0.005, 0.35, 8);
-const laserMat = new THREE.MeshBasicMaterial({ color: 0x00ff66, transparent: true, opacity: 0.0 });
-const laserMesh = new THREE.Mesh(laserGeo, laserMat);
-laserMesh.position.set(0.12, 0.65, 0.03);
-scene.add(laserMesh);
-
 // ── Tween System ──
 const tweens=[];
 function twCustomKey(roleKey,targetMesh,fromPos,toPos,durSec,onDone=null){
@@ -287,32 +273,15 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// ── 🎬 แอนิเมชันลูป (ดึงโครงสร้างพิกัดดั้งเดิมของนิวกลับมาแบบแม่นยำ 100%) ──
+// ── 🎬 แอนิเมชันคุมตามจังหวะกลไกของนิว (คงพิกัดฟีดของเดิมไว้ 100%) ──
 function playAnim(id){
   const S = speedMul;
   const sealMesh = meshMap['sealing_head'];
   const tapeMesh = meshMap['carrier_tape'];
 
-  // เคลียร์เอฟเฟกต์แสงไฟเลเซอร์ให้ดับสนิทเมื่อเปลี่ยนสถานะ
-  laserMat.opacity = 0.0;
-
   switch(id){
-    case 'LOAD_PART':
-      // มีชิ้นส่วนจำลองสีม่วงสแตนบายปรากฏตัวขึ้นมารอที่หน้าสถานี
-      partMesh.position.set(-0.25, 0.75, 0.03);
-      partMesh.visible = true;
-      twCustomKey('part_drop', partMesh, partMesh.position, new THREE.Vector3(-0.25, 0.44, 0.03), 0.6/S);
-      break;
-
-    case 'VISION':
-      // เปิดเอฟเฟกต์ลำแสงเลเซอร์สีเขียวสแกนเนอร์ส่องลงมาตรวจงาน
-      laserMesh.position.set(0.12, 0.65, 0.03);
-      laserMat.color.setHex(0x00ff66);
-      laserMat.opacity = 0.75;
-      break;
-
     case 'FEED_CARRIER':
-      // 🚀 ลอจิกดั้งเดิมของนิว: สั่ง Roll_1 และตัวปั๊มสายพานทำงานตามระยะ Matrix จริงที่ถูกต้อง
+      // ลอจิกสายพานขยับเลื่อน และล้อ Roll_1 หมุนขับเคลื่อนที่ถูกต้องสมบูรณ์ของนิว
       twRot('roller_feed', -Math.PI * 2.5, 1.2/S, 'x'); 
       twRot('feeder_block', -Math.PI * 2.5, 1.2/S, 'z'); 
 
@@ -323,15 +292,10 @@ function playAnim(id){
           tapeMesh.position.copy(origPos['carrier_tape']);
         });
       }
-
-      // ตกแต่งเอฟเฟกต์เม็ดชิ้นงานขยับเลื่อนไหลตามทางรางไปด้วย
-      if(partMesh.visible) {
-        const partNext = partMesh.position.clone().add(new THREE.Vector3(0.2, 0, 0));
-        twCustomKey('part_move', partMesh, partMesh.position, partNext, 1.2/S);
-      }
       break;
 
     case 'SEAL_PROCESS':
+      // หัวซีลสับกดลงและยกตัวคืนนุ่มนวล
       if(sealMesh && origPos['sealing_head']){
         const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.5, 0));
         twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 0.6/S, () => {
@@ -340,26 +304,14 @@ function playAnim(id){
       }
       break;
 
-    case 'VISION_QC':
-      // เปิดเอฟเฟกต์ลำแสงเลเซอร์สีฟ้าส่องเช็คคุณภาพรอยตัดซีล
-      laserMesh.position.set(0.42, 0.65, 0.03);
-      laserMat.color.setHex(0x00ffff);
-      laserMat.opacity = 0.75;
-      break;
-
     case 'TAKEUP_REEL':
+      // ล้อ Roll_2 ม้วนเก็บงาน
       twRot('roller_blue', Math.PI * 2.5, 1.0/S, 'x'); 
-      if(partMesh.visible) {
-        twCustomKey('part_to_reel', partMesh, partMesh.position, partMesh.position.clone().add(new THREE.Vector3(0.3, 0.15, 0)), 1.0/S, () => {
-           partMesh.visible = false;
-        });
-      }
       break;
 
     case 'LOAD_CARRIER':
       ret('carrier_tape', 0.25/S); 
       ret('sealing_head', 0.25/S);
-      partMesh.visible = false;
       break;
   }
 }
@@ -481,7 +433,7 @@ function setIO(ipBits, opBits) {
   for(let i=0; i<5; i++){
     const el = document.getElementById(`op${i}`);
     if(el){
-      if(opBits & (1<<i)) el.classList.add('active');
+      if(ipBits & (1<<i)) el.classList.add('active');
       else el.classList.remove('active');
     }
   }
@@ -509,8 +461,6 @@ window.fsmReset = function(){
   });
   document.getElementById('ovState').textContent = 'READY';
   current = 'READY';
-  partMesh.visible = false;
-  laserMat.opacity = 0.0;
 };
 
 // ==================================================
