@@ -115,4 +115,504 @@
   <span id="hstatus">Idle</span>
 </header>
 
-<div id="canvas
+<div id="canvas-wrap">
+  <canvas id="c"></canvas>
+  <div class="overlay">
+    <div class="ov-label" id="ovLabel">Current State</div>
+    <div class="ov-state" id="ovState">READY</div>
+    <div class="ov-desc" id="ovDesc">Waiting for Start</div>
+  </div>
+  <div class="anim-tag" id="animTag">⟳ Animating</div>
+</div>
+
+<div class="panel">
+  <div class="sec-title" style="padding-top:14px">⏳ Digital Twin Time Machine</div>
+  <div class="tm-panel">
+    <div class="tm-tabs">
+      <button id="tmLiveBtn" class="tm-btn active-live" onclick="switchTwinMode('LIVE')">🔴 LIVE MONITOR</button>
+      <button id="tmRepBtn" class="tm-btn" onclick="switchTwinMode('REPLAY')">⏳ REPLAY SQL</button>
+    </div>
+    <div id="tmSubPanel" style="display:none; flex-direction:column; gap:4px;">
+      <button class="btn" style="padding:4px; font-size:10px;" onclick="loadSqlHistory()">🔄 Load Log from SQL</button>
+      <input type="range" id="tmSlider" class="tm-slider" min="0" max="0" value="0" oninput="slideHistory(this.value)">
+      <div style="display:flex; justify-content:space-between; font-size:9px; color:var(--muted); font-family:monospace;">
+        <span id="tmStartT">-</span>
+        <span id="tmEndT">-</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ctrl">
+    <div class="btn-row" style="margin-bottom: 2px;">
+      <button class="btn active-mode" id="btnModeAuto" onclick="switchMode('auto')">🤖 Auto</button>
+      <button class="btn" id="btnModeSemi" onclick="switchMode('semi')">🕹️ Semi-Auto</button>
+    </div>
+    
+    <div class="btn-row">
+      <button class="btn primary" id="btnStart" onclick="fsmStart()">▶ Start</button>
+      <button class="btn danger" id="btnReset" onclick="fsmReset()" disabled>↺ Reset</button>
+    </div>
+    
+    <div class="sec-title" style="padding:4px 0 2px 0; font-size:9px">Inspection Decision (Semi-Auto Mode)</div>
+    <div class="btn-row">
+      <button class="btn ok-btn" id="btnOK" onclick="fsmDecision(true)" disabled>👍 OK</button>
+      <button class="btn ng-btn" id="btnNG" onclick="fsmDecision(false)" disabled>👎 NG</button>
+    </div>
+
+    <div class="speed-row">
+      <span class="slbl">Auto Speed</span>
+      <input type="range" id="spd" min="0.5" max="3" step="0.5" value="1"
+        oninput="updateSpeedSlider(this.value)">
+      <span class="sval" id="sval">1×</span>
+    </div>
+  </div>
+  
+  <div class="counters">
+    <div class="cnt"><div class="cnt-val" id="cCycles">0</div><div class="cnt-lbl">Feeds (Cycles)</div></div>
+  </div>
+  
+  <div class="sec-title">FSM Flow States</div>
+  <div class="states" id="statesList"></div>
+  
+  <div class="log-wrap">
+    <div class="log-hdr">
+      <span class="sec-title" style="padding:0">Event Log</span>
+      <span class="log-clr" onclick="document.getElementById('logBody').innerHTML=''">Clear</span>
+    </div>
+    <div class="log-body" id="logBody"></div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const PART_NAMES = {
+  carrier_tape: 'Cerrier', 
+  roller_feed:  'Roll_1', 
+  feeder_block: 'Feed_Cerrier',
+  roller_blue:  'Roll_2', 
+  sealing_head: 'Sealing', 
+};
+
+// ── 📋 รายชื่อลำดับ 16 สเตปและคำอธิบายภาษาไทยตามเงื่อนไขใหม่ของนิวเป๊ะ ๆ ──
+const STATES = [
+  {id:'LOAD_CARRIER',          action:'โหลด Carrier & Cover Tape เข้าที่เฉยๆ', isCheck:false},
+  {id:'INDEX_CARRIER',         action:'จัด Carrier & Cover ให้อยู่ในตำแหน่งเพื่อจะเริ่มการทำงานเฉย', isCheck:false},
+  {id:'POWER_ON',              action:'เริ่มเปิดเครื่อง ทุกอย่างจะถูกเปิดเพื่อสแตนบายเฉย', isCheck:false},
+  {id:'SET_PARAMS',            action:'Set ค่าต่างๆ พารามิเตอร์ของระบบ', isCheck:false},
+  {id:'SENSOR_CHECK_CARRIER',   action:'[CHECK] เซนเซอร์มีการตรวจสอบว่า Carrier อยู่ตำแหน่งจริงมั้ย', isCheck:true},
+  {id:'READY',                 action:'ถ้ามี Carrier ก็เริ่มต้นระบบได้เลย', isCheck:false},
+  {id:'LOAD_PART',             action:'มีการใส่ชิ้นงานลงใน Carrier', isCheck:false},
+  {id:'VISION',                action:'[CHECK] พอใส่เสร็จกล้อง 1 ก็จะตรวจสอบความถูกต้องของชิ้นงาน', isCheck:true},
+  {id:'CHECK_TEMP',            action:'[CHECK] ถ้าถูกแล้วก็จะทำการเช็คอุณหภูมิว่าถึงค่าที่กำหนดยัง', isCheck:true},
+  {id:'FEED_CARRIER',          action:'ถ้าถึงแล้ว Carrier ก็จะขยับ และ Roll_1 ก็จะหมุนตอนเลื่อนนี่แหละ', isCheck:false},
+  {id:'COUNT_PROCESS',         action:'จะมีการนับชิ้นงานโดยกล้อง 1 และ Encoder ที่นับตามระยะพิตช์', isCheck:false},
+  {id:'COUNT_CHECK',           action:'[CHECK] ตรวจสอบว่าค่านับตรงกับที่เช็คมั้ย', isCheck:true},
+  {id:'COUNT_ACCUMULATE',      action:'ถ้าตรงก็นับบวกสะสมขึ้นเพิ่ม 1 ชิ้น', isCheck:false},
+  {id:'SEAL_PROCESS',          action:'หัวซีลความร้อน (Seal) สับกดลงและยกตัวคืนที่สำเร็จ', isCheck:false},
+  {id:'VISION_QC',             action:'[CHECK] เช็คความถูกต้องของการซีลว่า Seal ดีมั้ย', isCheck:true},
+  {id:'TAKEUP_REEL',           action:'ถ้าดี Roll_2 ก็จะหมุนม้วนเก็บชิ้นงาน', isCheck:false},
+  {id:'ALARM',                 action:'🚨 ALARM / ระบบตรวจพบจุดขัดข้อง สั่งเบรกเครื่องจักรหยุดฉุกเฉิน!', isCheck:false}
+];
+
+window.speedMul = 1;
+
+// ── Three.js Engine Setup ──
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x06080a);
+const camera = new THREE.PerspectiveCamera(45,1,0.01,1000);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+
+scene.add(new THREE.AmbientLight(0xffffff,1.2));
+const dl = new THREE.DirectionalLight(0xffffff,1.5); dl.position.set(4,6,4); scene.add(dl);
+
+function resize(){
+  const p=canvas.parentElement;
+  renderer.setSize(p.clientWidth,p.clientHeight,false);
+  camera.aspect=p.clientWidth/p.clientHeight;
+  camera.updateProjectionMatrix();
+}
+resize();
+new ResizeObserver(resize).observe(canvas.parentElement);
+
+// ── Registry ──
+const meshMap={}, origPos={}, origMat={};
+function reg(role,mesh){
+  meshMap[role]=mesh;
+  origPos[role]=mesh.position.clone();
+  mesh._origRot = mesh.rotation.clone(); 
+}
+
+// ── Tween System ──
+const tweens=[];
+function twCustomKey(roleKey,targetMesh,fromPos,toPos,durSec,onDone=null){
+  const i=tweens.findIndex(t=>t.role===roleKey); if(i>-1) tweens.splice(i,1);
+  tweens.push({role:roleKey,mesh:targetMesh,from:fromPos.clone(),to:toPos.clone(),dur:durSec,elapsed:0,onDone});
+  document.getElementById('animTag').style.display='block';
+}
+
+function twRot(role,deltaRot,durSec,axis='x'){
+  const mesh=meshMap[role]; if(!mesh) return;
+  const key=role+'_r';
+  const i=tweens.findIndex(t=>t.role===key); if(i>-1) tweens.splice(i,1);
+  tweens.push({role:key,mesh,fromRot:mesh.rotation[axis],toRot:mesh.rotation[axis]+deltaRot,isRot:true,rotAxis:axis,dur:durSec,elapsed:0});
+  document.getElementById('animTag').style.display='block';
+}
+
+function ret(role,durSec=0.18){
+  const mesh=meshMap[role]; if(!mesh||!origPos[role]) return;
+  const i=tweens.findIndex(t=>t.role===role); if(i>-1) tweens.splice(i,1);
+  tweens.push({role,mesh,from:mesh.position.clone(),to:origPos[role].clone(),dur:durSec,elapsed:0});
+}
+function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
+
+// ── 🎬 แอนิเมชัน 3D คุมตามจังหวะเงื่อนไขทางกลตัวใหม่ ──
+function playAnim(id){
+  const S = speedMul;
+  const sealMesh = meshMap['sealing_head'];
+  const tapeMesh = meshMap['carrier_tape'];
+
+  switch(id){
+    case 'FEED_CARRIER':
+      // ข้อ 10: Carrier ขยับเลื่อน และ Roll_1 หมุนขับสายพานพร้อมกันช่วงนี้เท่านั้น
+      twRot('roller_feed', -Math.PI * 2.5, 1.2/S, 'x'); 
+      twRot('feeder_block', -Math.PI * 2.5, 1.2/S, 'z'); 
+
+      if(tapeMesh && origPos['carrier_tape']) {
+        tapeMesh.position.copy(origPos['carrier_tape']);
+        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0, 0, 2));
+        twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 1.2/S, () => {
+          tapeMesh.position.copy(origPos['carrier_tape']);
+        });
+      }
+      break;
+
+    case 'SEAL_PROCESS':
+      // ข้อ 14: หัวสูบกดลงและยกกลับแช่ความร้อนทันที จบสเตปนุ่มนวล
+      if(sealMesh && origPos['sealing_head']){
+        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.5, 0));
+        twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 0.6/S, () => {
+           twCustomKey('sealing_up', sealMesh, sealMesh.position, origPos['sealing_head'], 0.6/S);
+        });
+      }
+      break;
+
+    case 'TAKEUP_REEL':
+      // ข้อ 16: ผ่าน QC ปลายทางแล้ว สั่งให้ล้อ Roll_2 ม้วนเก็บงาน
+      twRot('roller_blue', Math.PI * 2.5, 1.0/S, 'x'); 
+      break;
+
+    case 'LOAD_CARRIER':
+      ret('carrier_tape', 0.25/S); 
+      ret('sealing_head', 0.25/S);
+      break;
+  }
+}
+
+// ── Render Loop ──
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=clock.getDelta();
+  controls.update();
+  
+  for(let i=tweens.length-1;i>=0;i--){
+    const t=tweens[i]; t.elapsed+=dt;
+    
+    // 🔥 ฟิกแก้บัค Visual Timing: สเกลความยาวตามตัวหารจริงของสเตปนั้น ไม่ใช้ 1.0 วินาทีคงที่
+    const currentDuration = t.dur || 1.0;
+    const p=Math.min(t.elapsed/currentDuration,1), ep=ease(p);
+    
+    if(t.isRot) t.mesh.rotation[t.rotAxis||'x'] = t.fromRot + (t.toRot - t.fromRot) * ep;
+    else t.mesh.position.lerpVectors(t.from,t.to,ep);
+    if(p>=1){ if(t.onDone) t.onDone(); tweens.splice(i,1); }
+  }
+
+  if(tweens.length===0) document.getElementById('animTag').style.display='none';
+  renderer.render(scene,camera);
+}
+animate();
+
+// ── Load Model ──
+new GLTFLoader().load('./export/Machine.glb', gltf=>{
+  const model = gltf.scene; scene.add(model);
+  model.traverse(obj => { if(obj.isMesh) obj.castShadow = obj.receiveShadow = true; });
+
+  const box=new THREE.Box3().setFromObject(model);
+  const center=box.getCenter(new THREE.Vector3());
+  const size=box.getSize(new THREE.Vector3()).length();
+  camera.position.set(center.x + size*0.6, center.y + size*0.5, center.z + size*0.8);
+  controls.target.copy(center); controls.update();
+  
+  let feederGroup = null;
+  model.traverse(obj => {
+    if (obj.name === PART_NAMES.carrier_tape) reg('carrier_tape', obj);
+    else if (obj.name === PART_NAMES.sealing_head) reg('sealing_head', obj);
+    else if (obj.name === PART_NAMES.roller_feed) {
+      obj.geometry.computeBoundingBox();
+      const localCenter = new THREE.Vector3(); obj.geometry.boundingBox.getCenter(localCenter);
+      obj.geometry.center(); obj.updateMatrixWorld(true); localCenter.applyMatrix4(obj.matrixWorld);
+      obj.position.copy(localCenter); reg('roller_feed', obj);
+    } 
+    else if (obj.name === PART_NAMES.roller_blue) {
+      if(obj.isMesh) {
+        obj.geometry.computeBoundingBox();
+        const blueCenter = new THREE.Vector3(); obj.geometry.boundingBox.getCenter(blueCenter);
+        obj.geometry.center(); blueCenter.applyMatrix4(obj.matrixWorld);
+        obj.position.copy(blueCenter); reg('roller_blue', obj);
+      } else { reg('roller_blue', obj); }
+    }
+    else if (obj.name === PART_NAMES.feeder_block) feederGroup = obj;
+  });
+  
+  if(feederGroup) {
+    feederGroup.updateMatrixWorld(true);
+    const worldPos = new THREE.Vector3(), worldQuat = new THREE.Quaternion(), worldScale = new THREE.Vector3();
+    feederGroup.matrixWorld.decompose(worldPos, worldQuat, worldScale);
+    scene.add(feederGroup); feederGroup.position.copy(worldPos); feederGroup.quaternion.copy(worldQuat); feederGroup.scale.copy(worldScale);
+    let innerMesh = null; feederGroup.traverse(child => { if(child.isMesh && !innerMesh) innerMesh = child; });
+    if(innerMesh && innerMesh.geometry) {
+      innerMesh.geometry.computeBoundingBox();
+      const innerCenter = new THREE.Vector3(); innerMesh.geometry.boundingBox.getCenter(innerCenter);
+      innerMesh.geometry.center(); innerMesh.position.add(innerCenter); 
+      reg('feeder_block', innerMesh); 
+    } else { reg('feeder_block', feederGroup); }
+  }
+  addLog(`System Core Loaded Successfully`,'info');
+},null,err=>addLog('GLB error: '+err.message,'err'));
+
+// ── UI Flow Generation ──
+const sl=document.getElementById('statesList');
+STATES.forEach(s=>{
+  const el=document.createElement('div'); el.className='si'; el.id='si_'+s.id;
+  el.innerHTML=`<div class="si-dot"></div><span class="si-name">${s.id}</span><span class="si-action">${s.action}</span>`;
+  sl.appendChild(el);
+});
+
+window.addLog = function(msg,type='info'){
+  const b=document.getElementById('logBody'); const ts=new Date().toTimeString().slice(0,8);
+  const el=document.createElement('div'); el.className='le '+type;
+  el.innerHTML=`<span class="ts">${ts}</span><span class="ev">${msg}</span>`;
+  b.appendChild(el); b.scrollTop=b.scrollHeight;
+}
+
+// ==================================================
+// ⚙️ FSM CONTROL SYNC LAYER (ขึ้นตรงกับ Python 100%)
+// ==================================================
+let current='READY', running=false, isSemiAutoMode = false, stepAllowed = false, cycles=0;
+
+window.switchMode = function(mode) {
+  if (twinAppMode === "REPLAY") return; 
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "MODE", mode: mode })); 
+  }
+}
+
+window.updateSpeedSlider = function(val) {
+  speedMul = +val;
+  document.getElementById('sval').textContent = val + '×';
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "SPEED", value: speedMul }));
+  }
+}
+
+function setIO(ipBits, opBits) {
+  for(let i=0; i<7; i++){
+    const el = document.getElementById(`ip${i}`);
+    if(el){
+      if(ipBits & (1<<i)) el.classList.add('active');
+      else el.classList.remove('active');
+    }
+  }
+  for(let i=0; i<5; i++){
+    const el = document.getElementById(`op${i}`);
+    if(el){
+      if(opBits & (1<<i)) el.classList.add('active');
+      else el.classList.remove('active');
+    }
+  }
+}
+
+window.fsmDecision = function(isPassed) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "DECISION", value: isPassed })); 
+  }
+}
+
+window.fsmStart = function(){ 
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "START" })); 
+  }
+};
+
+window.fsmReset = function(){
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "RESET" })); 
+  }
+  tweens.length = 0;
+  Object.keys(meshMap).forEach(role => {
+    const m = meshMap[role]; if (m && origPos[role]) { m.position.copy(origPos[role]); if (m._origRot) m.rotation.copy(m._origRot); }
+  });
+  document.getElementById('ovState').textContent = 'READY';
+  current = 'READY';
+};
+
+// ==================================================
+// 🔌 WEBSOCKET INTERFACE & SQL REPLAY CHANNEL (Phase 6)
+// ==================================================
+let ws;
+let twinAppMode = "LIVE";
+let historicalTimeline = [];
+
+window.switchTwinMode = function(targetMode) {
+  navigator.vibrate = navigator.vibrate || function(){};
+  twinAppMode = targetMode;
+  const liveBtn = document.getElementById("tmLiveBtn");
+  const repBtn = document.getElementById("tmRepBtn");
+  const subPanel = document.getElementById("tmSubPanel");
+  const hdot = document.getElementById("hdot");
+  const hstatus = document.getElementById("hstatus");
+
+  if (targetMode === "LIVE") {
+    liveBtn.className = "tm-btn active-live";
+    repBtn.className = "tm-btn";
+    subPanel.style.display = "none";
+    
+    document.getElementById('ovLabel').textContent = "Current State";
+    document.getElementById('ovState').textContent = current;
+    document.getElementById('ovState').classList.remove('replay-title');
+    
+    if(!running) { hdot.className = 'hdot'; hstatus.textContent = 'Idle'; }
+    else { hdot.className = 'hdot run'; hstatus.textContent = 'Running'; }
+    
+    addLog("🟢 เปิดหน้าจอ Live Monitor ลิงค์พิกัดปัจจุบัน", "ok");
+  } else {
+    liveBtn.className = "tm-btn";
+    repBtn.className = "tm-btn active-rep";
+    subPanel.style.display = "flex";
+    
+    hdot.className = "hdot replay-mode";
+    hstatus.textContent = "Replay Mode Active";
+    document.getElementById('ovLabel').textContent = "⏳ Time Machine Replay";
+    document.getElementById('ovState').classList.add('replay-title');
+    
+    addLog("⏳ เปิดระบบ Time Machine ค้นหาประวัติ SQL", "sys");
+    loadSqlHistory();
+  }
+};
+
+window.loadSqlHistory = function() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "GET_HISTORY" }));
+  } else {
+    addLog("❌ ไม่สามารถดึงข้อมูลได้ เนื่องจากไม่ได้เชื่อมต่อเซิร์ฟเวอร์หลังบ้าน", "err");
+  }
+};
+
+window.slideHistory = function(val) {
+  if (historicalTimeline.length === 0) return;
+  const log = historicalTimeline[val];
+  
+  document.getElementById('ovState').textContent = log.state;
+  document.getElementById('ovDesc').textContent = `รอบสะสมที่: ${log.cycle} | เวลา: ${log.time}`;
+  
+  document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','inspecting'));
+  const el = document.getElementById('si_' + log.state);
+  if(el) el.classList.add('active');
+
+  playAnim(log.state);
+  addLog(`🕒 ไทม์ไลน์อดีต [สเตป: ${log.state}] (Cycle: ${log.cycle}) เวลาบันทึก: ${log.time}`, "sys");
+};
+
+function initWebSocket() {
+  ws = new WebSocket("ws://localhost:8765");
+
+  ws.onopen = () => {
+    addLog("⚡ เชื่อมต่อเซิร์ฟเวอร์หลังบ้าน (Python Gateway + SQL) สำเร็จ", "ok");
+  };
+
+  ws.onmessage = (event) => {
+    const raw = JSON.parse(event.data);
+    
+    if (raw.type === "LIVE_SYNC" && twinAppMode === "LIVE") {
+      const sys = raw.system;
+      
+      document.getElementById('cCycles').textContent = sys.cycles;
+      cycles = sys.cycles;
+      isSemiAutoMode = (sys.mode === 'semi');
+      running = sys.running;
+      stepAllowed = sys.step_allowed;
+
+      document.getElementById('btnModeSemi').classList.toggle('active-mode', isSemiAutoMode);
+      document.getElementById('btnModeAuto').classList.toggle('active-mode', !isSemiAutoMode);
+      
+      document.getElementById('btnOK').disabled = !(isSemiAutoMode && stepAllowed);
+      document.getElementById('btnNG').disabled = !(isSemiAutoMode && stepAllowed);
+      document.getElementById('btnStart').disabled = running;
+      document.getElementById('btnReset').disabled = !running;
+
+      if (current !== sys.current_state) {
+        document.querySelectorAll('.si.active').forEach(e => { e.classList.remove('active', 'inspecting', 'visited'); });
+        current = sys.current_state;
+        
+        const el = document.getElementById('si_' + current);
+        const s = STATES.find(x => x.id === current);
+        
+        if (el) {
+          el.classList.remove('visited'); 
+          el.classList.add('active');
+          if (s && s.isCheck && isSemiAutoMode) el.classList.add('inspecting');
+        }
+        
+        document.getElementById('ovState').textContent = current; 
+        document.getElementById('ovDesc').textContent = s?.action || '';
+        document.getElementById('ovState').classList.toggle('inspect-mode', (s?.isCheck && isSemiAutoMode));
+        
+        const dot = document.getElementById('hdot'), hs = document.getElementById('hstatus');
+        if (!running) {
+          dot.className = 'hdot'; hs.textContent = 'Idle';
+        } else if (s && s.isCheck && isSemiAutoMode) {
+          dot.className = 'hdot inspect'; hs.textContent = 'Awaiting OK / NG Decision...';
+        } else {
+          dot.className = 'hdot run'; hs.textContent = 'Running';
+        }
+
+        playAnim(current);
+        addLog('→ ' + current, 'info');
+      }
+
+      setIO(sys.ip0, sys.op0);
+    } 
+    else if (raw.type === "HISTORY_RESPONSE") {
+      historicalTimeline = raw.data;
+      if (historicalTimeline.length === 0) return;
+
+      const slider = document.getElementById("tmSlider");
+      slider.max = historicalTimeline.length - 1;
+      slider.value = 0;
+
+      document.getElementById("tmStartT").innerText = historicalTimeline[0].time.split(" ")[1];
+      document.getElementById("tmEndT").innerText = historicalTimeline[historicalTimeline.length - 1].time.split(" ")[1];
+      addLog(`📜 โหลดข้อมูลดิบ ${historicalTimeline.length} แถวจาก SQL ดาต้าเบสแล้ว`, "ok");
+      
+      if(twinAppMode === "REPLAY") slideHistory(0);
+    }
+  };
+
+  ws.onclose = () => {
+    setTimeout(initWebSocket, 2000);
+  };
+}
+
+initWebSocket();
+</script>
+</body>
+</html>
