@@ -1,565 +1,547 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>SMD Reel Packing - Digital Twin Dashboard</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #121212;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #e0e0e0;
-            overflow-x: hidden;
-        }
-        #container {
-            display: flex;
-            height: 100vh;
-            width: 100vw;
-        }
-        #canvas-container {
-            flex: 1;
-            position: relative;
-            background: radial-gradient(circle, #1a1a2e 0%, #0f0f1a 100%);
-        }
-        #control-panel {
-            width: 380px;
-            background-color: #1e1e1e;
-            border-left: 2px solid #333;
-            padding: 20px;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-            box-shadow: -5px 0 15px rgba(0,0,0,0.5);
-        }
-        h2, h3 {
-            margin-top: 0;
-            color: #ffffff;
-            letter-spacing: 1px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 8px;
-        }
-        .status-card {
-            background-color: #252525;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 15px;
-            border: 1px solid #3a3a3a;
-        }
-        .status-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        .status-label { color: #aaa; }
-        .status-value { font-weight: bold; color: #fff; }
-        
-        .badge {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        #status-indicator { background-color: #dc3545; color: white; }
-        
-        .btn {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 10px;
-            border: none;
-            border-radius: 5px;
-            font-weight: bold;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-sizing: border-box;
-        }
-        .btn-start { background-color: #28a745; color: white; }
-        .btn-start:hover { background-color: #218838; }
-        .btn-reset { background-color: #dc3545; color: white; }
-        .btn-reset:hover { background-color: #c82333; }
-        .btn-mode { background-color: #007bff; color: white; }
-        .btn-mode:hover { background-color: #0069d9; }
-        
-        .decision-box {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        .btn-ok { background-color: #17a2b8; color: white; flex: 1; }
-        .btn-ng { background-color: #e0a800; color: white; flex: 1; }
-        
-        /* สไตล์โซนฝั่ง I/O Bit Matrix */
-        .io-container {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 6px;
-            margin-top: 10px;
-        }
-        .io-dot {
-            background-color: #333;
-            color: #777;
-            text-align: center;
-            padding: 6px 2px;
-            font-size: 10px;
-            font-weight: bold;
-            border-radius: 3px;
-            border: 1px solid #444;
-            transition: all 0.1s ease;
-        }
-        .io-dot.active-op { background-color: #00ff66; color: #000; box-shadow: 0 0 8px #00ff66; border-color: #fff; }
-        .io-dot.active-ip { background-color: #ff9900; color: #000; box-shadow: 0 0 8px #ff9900; border-color: #fff; }
+  <meta charset="utf-8">
+  <title>Demo — Digital Twin (Perfect Auto & Semi-Auto OK/NG System)</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{\r      --bg:#0a0c0f;--surface:#111318;--surface2:#1a1d24;--border:#2a2d38;\r      --text:#e8eaf0;--muted:#6b7080;--teal:#00c9a7;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;\r    }
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;\r      display:grid;grid-template-columns:1fr 320px;grid-template-rows:48px 1fr;height:100vh;overflow:hidden}
+    header{grid-column:1/-1;display:flex;align-items:center;justify-content:between;padding:0 16px;\r      background:var(--surface);border-bottom:1px solid var(--border)}
+    .brand{font-weight:700;font-size:15px;letter-spacing:0.5px;display:flex;align-items:center;gap:8px}
+    .brand span{color:var(--teal)}
+    .status-bar{display:flex;align-items:center;gap:16px;margin-left:auto}
+    .hstatus-wrap{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--muted)}
+    .hdot{width:8px;height:8px;border-radius:50%;background:#ef4444;transition:background 0.3s}
+    .hdot.online{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+    .hdot.replay-mode {background:var(--purple);box-shadow:0 0 8px var(--purple)}
+    main{position:relative;background:#0d0f14}
+    #c3d{width:100%;height:100%}
+    .overlay-hud{position:absolute;top:12px;left:12px;background:rgba(17,19,24,0.85);\r      padding:12px 16px;border-radius:6px;border:1px solid var(--border);backdrop-filter:blur(4px);\r      pointer-events:none;display:flex;flex-direction:column;gap:4px}
+    .hud-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600}
+    .hud-val{font-size:20px;font-weight:700;font-family:monospace;color:var(--teal)}
+    
+    sidebar{background:var(--surface);border-left:1px solid var(--border);padding:16px;\r      display:flex;flex-direction:column;gap:16px;overflow-y:auto}
+    .panel{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;\r      display:flex;flex-direction:column;gap:10px}
+    .panel-h{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--muted);\r      margin-bottom:2px;display:flex;justify-content:between;align-items:center}
+    .btn{background:var(--border);color:var(--text);border:none;padding:8px 12px;border-radius:4px;\r      font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;\r      gap:6px;transition:all 0.15s ease}
+    .btn:hover{filter:brightness(1.15)}
+    .btn:disabled{opacity:0.4;cursor:not-allowed;filter:none}
+    .btn-primary{background:var(--teal);color:#05070a}
+    .btn-danger{background:var(--red);color:#05070a}
+    
+    .grid-io{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+    .si{background:var(--surface);border:1px solid var(--border);padding:6px 4px;border-radius:4px;\r      text-align:center;font-size:10px;font-weight:700;color:var(--muted);transition:all 0.2s}
+    .si.active.ip{background:rgba(251,191,36,0.15);color:var(--amber);border-color:var(--amber)}
+    .si.active.op{background:rgba(0,201,167,0.15);color:var(--teal);border-color:var(--teal)}
+    
+    .log-box{height:160px;background:var(--surface);border:1px solid var(--border);border-radius:4px;\r      padding:6px;overflow-y:auto;font-family:monospace;font-size:11px;display:flex;flex-direction:column;gap:4px}
+    .log-ln{line-height:1.4;color:#9ca3af}
+    .log-ln.sys{color:var(--purple)}
+    .log-ln.ok{color:var(--teal)}
+    .log-ln.err{color:var(--red)}
+    .log-ln.warn{color:var(--amber)}
 
-        /* แถบควบคุม Replay Time Machine */
-        .time-machine-panel {
-            background: #25252b;
-            padding: 15px;
-            margin-top: 5px;
-            border-radius: 6px;
-            border: 1px solid #4f4f64;
-        }
-        .mode-selector {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 12px;
-        }
-        .mode-tab {
-            flex: 1;
-            padding: 8px;
-            text-align: center;
-            background: #333;
-            font-size: 12px;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 4px;
-            border: 1px solid #444;
-        }
-        .mode-tab.active-live { background: #28a745; color: white; border-color: #51cb72; }
-        .mode-tab.active-replay { background: #ffc107; color: black; border-color: #ffe082; }
-
-        .slider-style {
-            width: 100%;
-            margin: 10px 0;
-            -webkit-appearance: none;
-            background: #444;
-            height: 6px;
-            border-radius: 3px;
-            outline: none;
-        }
-        .slider-style::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            background: #ffc107;
-            cursor: pointer;
-        }
-    </style>
+    /* ⏳ สไตล์เพิ่มเติมสำหรับแผง Time Machine (Phase 6) */
+    .mode-selector { display: flex; gap: 4px; margin-bottom: 4px; }
+    .mode-btn { flex: 1; padding: 6px; font-size: 11px; font-weight: bold; border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 4px; cursor: pointer; }
+    .mode-btn.active-live { background: var(--teal); color: #000; border-color: var(--teal); }
+    .mode-btn.active-replay { background: var(--purple); color: white; border-color: var(--purple); }
+    .slider-style { width: 100%; margin: 8px 0; -webkit-appearance: none; background: var(--border); height: 4px; border-radius: 2px; outline: none; }
+    .slider-style::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--purple); cursor: pointer; }
+  </style>
 </head>
 <body>
 
-<div id="container">
-    <div id="canvas-container">
-        <div style="position: absolute; top: 15px; left: 15px; pointer-events: none; z-index: 10;">
-            <span id="status-indicator" class="badge">Disconnected</span>
-            <span id="speed-label" class="badge" style="background:#444; margin-left:5px;">Speed: 1.0x</span>
+  <header>
+    <div class="brand">⚙️ <span>SCHAFFNER</span> DIGITAL TWIN</div>
+    <div class="status-bar">
+      <div class="hstatus-wrap">
+        <div id="hdot" class="hdot"></div>
+        <span id="hstatus">Offline</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="c3d"></div>
+    <div class="overlay-hud">
+      <div class="hud-title">OVERVIEW PROCESS</div>
+      <div id="ovLabel" class="hud-val">IDLE / READY</div>
+    </div>
+  </main>
+
+  <sidebar>
+    <div class="panel">
+      <div class="panel-h">⏳ TIME MACHINE CONTROL</div>
+      <div class="mode-selector">
+        <button id="tab-live" class="mode-btn active-live" onclick="setAppMode('LIVE')">🔴 LIVE SYNC</button>
+        <button id="tab-replay" class="mode-btn" onclick="setAppMode('REPLAY')">⏳ REPLAY SQL</button>
+      </div>
+      <div id="replay-panel" style="display: none; flex-direction: column; gap: 6px;">
+        <button class="btn" style="background: var(--surface); font-size: 11px;" onclick="requestSQLLogs()">🔄 ดึงประวัติจาก SQL</button>
+        <input type="range" id="replay-slider" class="slider-style" min="0" max="0" value="0" oninput="onSliderMove(this.value)">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-family: monospace;">
+          <span id="txt-start-time">-</span>
+          <span id="txt-end-time">-</span>
         </div>
+        <div id="txt-replay-info" style="font-size: 11px; color: var(--purple); text-align: center; font-weight: bold; background: var(--surface); padding: 4px; border-radius: 4px;">
+          สเตปอดีต: รอโหลด...
+        </div>
+      </div>
     </div>
 
-    <div id="control-panel">
-        <h2>📦 BK-05 Twin</h2>
-        
-        <div class="time-machine-panel">
-            <div class="mode-selector">
-                <div id="tab-live" class="mode-tab active-live" onclick="setAppMode('LIVE')">🔴 LIVE MONITOR</div>
-                <div id="tab-replay" class="mode-tab" onclick="setAppMode('REPLAY')">⏳ REPLAY MACHINE</div>
-            </div>
+    <div class="panel">
+      <div class="panel-h">📦 STATION CONTROL <span>OP-PACK05</span></div>
+      <button id="btnStart" class="btn btn-primary" onclick="fsmStart()">▶ START SYSTEM</button>
+      
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button id="btnMode" class="btn" onclick="toggleMode()">โหมด: AUTO</button>
+        <button id="btnSpeed" class="btn" onclick="cycleSpeed()">ความเร็ว: 1x</button>
+      </div>
 
-            <div id="replay-controls" style="display: none;">
-                <button class="btn" style="background:#17a2b8; color:white; padding:6px; font-size:12px; margin-bottom:8px;" onclick="requestSQLLogs()">🔄 ดึงประวัติล่าสุดจาก SQL</button>
-                <input type="range" id="replay-slider" class="slider-style" min="0" max="0" value="0" oninput="onSliderMove(this.value)">
-                <div style="display:flex; justify-content:space-between; font-size:11px; color:#aaa;">
-                    <span id="txt-start-time">-</span>
-                    <span id="txt-end-time">-</span>
-                </div>
-                <div id="txt-replay-log" style="font-size:12px; color:#ffc107; margin-top:8px; font-weight:bold; text-align:center;">
-                    สเตปอดีต: รอโหลดข้อมูล...
-                </div>
-            </div>
+      <div style="background:rgba(0,0,0,0.2);padding:8px;border-radius:4px;border:1px dashed var(--border)">
+        <div class="panel-h" style="font-size:10px;margin-bottom:6px">🕹️ SEMI-AUTO DECISION</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button id="btnOK" class="btn" style="background:#065f46;color:#a7f3d0" onclick="humanDecision(true)" disabled>👍 OK</button>
+          <button id="btnNG" class="btn" style="background:#991b1b;color:#fca5a5" onclick="humanDecision(false)" disabled>👎 NG</button>
         </div>
-        <br>
+      </div>
 
-        <div class="status-card">
-            <div class="status-row">
-                <span class="status-label">ขั้นตอนปัจจุบัน (State):</span>
-                <span id="lbl-state" class="status-value" style="color: #00ffcc; font-size: 18px;">READY</span>
-            </div>
-            <div class="status-row">
-                <span class="status-label">จำนวนยอดผลิต (Cycles):</span>
-                <span id="lbl-cycles" class="status-value">0</span>
-            </div>
-            <div class="status-row">
-                <span class="status-label">โหมดควบคุม (Control):</span>
-                <span id="lbl-mode" class="status-value">AUTO</span>
-            </div>
-        </div>
-
-        <div id="live-action-buttons">
-            <button class="btn btn-start" onclick="sendAction('START')">▶ START MACHINE</button>
-            <button class="btn btn-mode" id="btn-toggle-mode" onclick="toggleControlMode()">🕹️ สลับเป็น SEMI-AUTO</button>
-            
-            <div id="decision-panel" style="display: none; background:#332200; padding:10px; border-radius:5px; margin-bottom:10px; border:1px solid #886600;">
-                <div style="font-size:12px; text-align:center; color:#ffc107; font-weight:bold; margin-bottom:5px;">Awaiting OK / NG Decision...</div>
-                <div class="decision-box">
-                    <button class="btn btn-ok" onclick="sendDecision(true)" style="margin:0;">👍 OK</button>
-                    <button class="btn btn-ng" onclick="sendDecision(false)" style="margin:0;">👎 NG</button>
-                </div>
-            </div>
-            
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                <button class="btn" style="background:#555; color:white; margin:0; flex:1; padding:8px;" onclick="changeSpeed(0.5)">🐌 ช้า</button>
-                <button class="btn" style="background:#555; color:white; margin:0; flex:1; padding:8px;" onclick="changeSpeed(1.0)">⚡ ปกติ</button>
-                <button class="btn" style="background:#555; color:white; margin:0; flex:1; padding:8px;" onclick="changeSpeed(2.5)">🚀 เร็ว</button>
-            </div>
-            
-            <button class="btn btn-reset" onclick="sendAction('RESET')">↺ RESET SYSTEM</button>
-        </div>
-
-        <div class="status-card">
-            <div style="font-size: 12px; font-weight: bold; margin-bottom: 5px; color:#ff9900;">DIGITAL INPUTS (40011 - 40017)</div>
-            <div class="io-container">
-                <div id="ip-bit-0" class="io-dot">CARRIER</div>
-                <div id="ip-bit-1" class="io-dot">LOADED</div>
-                <div id="ip-bit-2" class="io-dot">VS_TRG</div>
-                <div id="ip-bit-3" class="io-dot">TEMP</div>
-                <div id="ip-bit-4" class="io-dot">QC_PASS</div>
-                <div id="ip-bit-5" class="io-dot">CYL_DN</div>
-                <div id="ip-bit-6" class="io-dot">CYL_UP</div>
-            </div>
-            
-            <div style="font-size: 12px; font-weight: bold; margin-top: 15px; margin-bottom: 5px; color:#00ff66;">DIGITAL OUTPUTS (40021 - 40025)</div>
-            <div class="io-container">
-                <div id="op-bit-0" class="io-dot">M_INDEX</div>
-                <div id="op-bit-1" class="io-dot">M_ROLL2</div>
-                <div id="op-bit-2" class="io-dot">CYL_SEAL</div>
-                <div id="op-bit-3" class="io-dot">ALARM</div>
-                <div id="op-bit-4" class="io-dot">CYL_FEED</div>
-            </div>
-        </div>
+      <button id="btnReset" class="btn btn-danger" onclick="fsmReset()" disabled>↺ RESET ALARM</button>
     </div>
-</div>
 
-<script>
-    // ==================================================
-    // 🌐 GLOBAL STATE VARIABLES
-    // ==================================================
-    let socket;
-    let currentMode = "auto";
-    let appMode = "LIVE"; 
-    let historicalTimeline = [];
+    <div class="panel">
+      <div class="panel-h">📈 MONITORING</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px">
+        <span style="color:var(--muted)">Cycles Completed:</span>
+        <span id="cCycles" style="font-weight:700;color:var(--teal)">0</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">🔌 DIGITAL INPUTS <span>(40011-40017)</span></div>
+      <div class="grid-io">
+        <div id="ip0" class="si ip">CARRIER</div>
+        <div id="ip1" class="si ip">LOADED</div>
+        <div id="ip2" class="si ip">VISION</div>
+        <div id="ip3" class="si ip">TEMP</div>
+        <div id="ip4" class="si ip">QC_PASS</div>
+        <div id="ip5" class="si ip">CYL_DN</div>
+        <div id="ip6" class="si ip">CYL_UP</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">⚡ DIGITAL OUTPUTS <span>(40021-40025)</span></div>
+      <div class="grid-io">
+        <div id="op0" class="si op">M_INDEX</div>
+        <div id="op1" class="si op">M_ROLL2</div>
+        <div id="op2" class="si op">CYL_SEAL</div>
+        <div id="op3" class="si op">ALARM</div>
+        <div id="op4" class="si op">CYL_FEED</div>
+      </div>
+    </div>
+
+    <div class="panel" style="flex:1;margin-bottom:0">
+      <div class="panel-h">📝 EVENT SYSTEM LOG</div>
+      <div id="logBox" class="log-box"></div>
+    </div>
+  </sidebar>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     // ==================================================
-    // 📦 THREE.JS 3D ENGINE SETUP
+    // 📦 THREE.JS SCENE INITIALIZATION (ของนิว 100%)
     // ==================================================
-    const container = document.getElementById('canvas-container');
+    const container = document.getElementById('c3d');
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x10101a, 0.015);
+    scene.background = new THREE.Color(0x0d0f14);
+    scene.fog = new THREE.FogExp2(0x0d0f14, 0.015);
 
-    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.set(0, 8, 12);
+    const camera = new THREE.PerspectiveCamera(40, container.clientWidth/container.clientHeight, 0.1, 100);
+    camera.position.set(4.5, 4.5, 6.5);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.maxPolarAngle = Math.PI / 2 - 0.05; 
+    controls.maxPolarAngle = Math.PI/2 - 0.02;
+    controls.target.set(0, 0.5, 0);
 
-    // ระบบแสงสว่างในโลก 3D
-    const ambientLight = new THREE.AmbientLight(0x404050, 1.5);
+    // แสงสว่างในแบบจำลองของนิว
+    const ambientLight = new THREE.AmbientLight(0x1a202c, 1.2);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    dirLight.position.set(10, 15, 5);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+    dirLight.position.set(5, 8, 4);
     dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
+    dirLight.shadow.bias = -0.001;
     scene.add(dirLight);
 
-    // สร้างพื้นตารางโรงงานกึ่งดิจิทัล
-    const grid = new THREE.GridHelper(30, 30, 0x4f4f64, 0x222233);
-    grid.position.y = -0.01;
+    const pointLight = new THREE.PointLight(0x00c9a7, 0.6, 5);
+    pointLight.position.set(0, 1.5, 0);
+    scene.add(pointLight);
+
+    // สร้างพื้นสไตล์นิว
+    const floorGeo = new THREE.PlaneGeometry(20, 20);
+    const floorMat = new THREE.MeshStandardMaterial({ color:0x0f1115, roughness:0.7, metalness:0.1 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI/2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    const grid = new THREE.GridHelper(20, 40, 0x1e2330, 0x141822);
+    grid.position.y = 0.001;
     scene.add(grid);
 
     // ==================================================
-    // 🏗️ สร้างโมเดลเครื่องจักรจำลอง (SMD Packing Station Components)
+    // 🏗️ MESH GENERATION (ส่วนประกอบโมเดล 3D เดิมของนิว)
     // ==================================================
-    // 1. ตัวฐานแท่นเครื่องจักรหลัก (Main Frame Chassis)
-    const baseGeo = new THREE.BoxGeometry(7, 0.5, 3);
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.4 });
-    const machineBase = new THREE.Mesh(baseGeo, baseMat);
-    machineBase.position.y = 0.25;
-    scene.add(machineBase);
+    const meshMap = {};
+    const origPos = {};
+    const tweens = [];
 
-    // 2. ม้วนล้อเทปสายพานหลักฝั่งดึง (Feed Reel Roller)
-    const reelGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.3, 32);
-    const reelMat = new THREE.MeshStandardMaterial({ color: 0xd35400, metalness: 0.3 });
-    const feedReel = new THREE.Mesh(reelGeo, reelMat);
-    feedReel.rotation.x = Math.PI / 2;
-    feedReel.position.set(-2.5, 1.2, 0);
-    scene.add(feedReel);
-
-    // 3. ม้วนล้อฝั่งเก็บม้วนเทปชุดที่ 2 (Roll_2 Take-up Reel)
-    const takeupReel = feedReel.clone();
-    takeupReel.material = new THREE.MeshStandardMaterial({ color: 0x7f8c8d, metalness: 0.6 });
-    takeupReel.position.set(2.5, 1.2, 0);
-    scene.add(takeupReel);
-
-    // 4. ชุดหัวโครงสร้างกระบอกสูบซีลถาด (Seal Cylinder Unit)
-    const towerGeo = new THREE.BoxGeometry(0.8, 2.5, 0.8);
-    const towerMat = new THREE.MeshStandardMaterial({ color: 0x34495e });
-    const sealTower = new THREE.Mesh(towerGeo, towerMat);
-    sealTower.position.set(0, 1.75, 0);
-    scene.add(sealTower);
-
-    // 5. แกนกระบอกสูบหัวกดความร้อนที่เลื่อนขึ้นลงได้จริง (Piston Handle)
-    const pistonGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.8, 16);
-    const pistonMat = new THREE.MeshStandardMaterial({ color: 0xbdc3c7, metalness: 0.8 });
-    const piston = new THREE.Mesh(pistonGeo, pistonMat);
-    piston.position.set(0, 0.8, 0);
-    scene.add(piston);
-
-    // 6. แป้นหัวซีลความร้อนขอบล่าง (Heater Block Tool)
-    const blockGeo = new THREE.BoxGeometry(1.0, 0.3, 0.6);
-    const blockMat = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.2 });
-    const heaterBlock = new THREE.Mesh(blockGeo, blockMat);
-    heaterBlock.position.set(0, -0.4, 0);
-    piston.add(heaterBlock); // ฝังให้เลื่อนตามแกนสูบ Piston เสมอ
-
-    // 7. ชิ้นงานจำลองบนสายพาน (Carrier SMD Tape Loop Part)
-    const workGeo = new THREE.BoxGeometry(0.3, 0.15, 0.3);
-    const workMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, emissive: 0x003311 });
-    const workPart = new THREE.Mesh(workGeo, workMat);
-    workPart.position.set(-1.0, 0.6, 0);
-    scene.add(workPart);
-
-    // ==================================================
-    // ⚙️ ANIMATION / REALTIME SYNCHRONIZER LOGIC
-    // ==================================================
-    function updateMachineUI(state, cycles, mode, step_allowed) {
-        document.getElementById("lbl-state").innerText = state;
-        document.getElementById("lbl-cycles").innerText = cycles;
-        
-        currentMode = mode;
-        const btnToggle = document.getElementById("btn-toggle-mode");
-        if (mode === "semi") {
-            document.getElementById("lbl-mode").innerText = "SEMI-AUTO";
-            btnToggle.innerText = "🕹️ สลับเป็น AUTO MODE";
-            btnToggle.style.background = "#e0a800";
-            document.getElementById("decision-panel").style.display = step_allowed ? "block" : "none";
-        } else {
-            document.getElementById("lbl-mode").innerText = "AUTOMATIC";
-            btnToggle.innerText = "🕹️ สลับเป็น SEMI-AUTO";
-            btnToggle.style.background = "#007bff";
-            document.getElementById("decision-panel").style.display = "none";
-        }
-
-        // --- ควบคุมการขยับโมเดล 3D ตามสเตป FSM จริง ---
-        // เคลียร์สีเอฟเฟกต์หัวซีลความร้อนปกติ
-        heaterBlock.material.emissive.setHex(0x000000);
-
-        if (state === "INDEX") {
-            feedReel.rotation.y += 0.05;
-            takeupReel.rotation.y += 0.05;
-            workPart.position.x += 0.03;
-            if (workPart.position.x > 0.0) workPart.position.x = -1.5;
-        } 
-        else if (state === "CHECK_CARRIER") {
-            workPart.position.set(-0.5, 0.6, 0);
-        }
-        else if (state === "LOAD_PART") {
-            workPart.position.set(0, 0.6, 0);
-        }
-        else if (state === "SEAL_DOWN") {
-            // ดึงหัวสูบกระบอกลมกดลงมาตำแหน่งล่างสุด (Y ต่ำลง)
-            if (piston.position.y > 0.45) piston.position.y -= 0.05;
-            heaterBlock.material.emissive.setHex(0x551111); // หัวซีลเรืองแสงแดงแสดงความร้อน
-        } 
-        else if (state === "SEAL_UP" || state === "VISION_QC") {
-            // ยกกระบอกสูบกลับขึ้นด้านบนตำแหน่งปกติ
-            if (piston.position.y < 0.8) piston.position.y += 0.05;
-        }
-        else if (state === "ROLL") {
-            takeupReel.rotation.y += 0.05;
-            workPart.position.x += 0.05;
-        }
+    function addBox(name, w, h, d, x, y, z, color, m=0.2, r=0.5) {
+      const g = new THREE.BoxGeometry(w, h, d);
+      const mat = new THREE.MeshStandardMaterial({ color, metalness:m, roughness:r });
+      const mesh = new THREE.Mesh(g, mat);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      scene.add(mesh);
+      meshMap[name] = mesh;
+      origPos[name] = mesh.position.clone();
+      return mesh;
     }
 
+    function addCyl(name, rt, rb, h, s, x, y, z, color, m=0.4, r=0.3, rotZ=0) {
+      const g = new THREE.CylinderGeometry(rt, rb, h, s);
+      const mat = new THREE.MeshStandardMaterial({ color, metalness:m, roughness:r });
+      const mesh = new THREE.Mesh(g, mat);
+      mesh.position.set(x, y, z);
+      if(rotZ) mesh.rotation.z = rotZ;
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      scene.add(mesh);
+      meshMap[name] = mesh;
+      origPos[name] = mesh.position.clone();
+      mesh._origRot = mesh.rotation.clone();
+      return mesh;
+    }
+
+    // ประกอบชิ้นงานตามแบบจำลองของนิวเป๊ะ ๆ
+    addBox('base', 3.4, 0.3, 1.2, 0, 0.15, 0, 0x1e222b, 0.5, 0.4);
+    addBox('pillarL', 0.2, 1.6, 0.4, -1.5, 1.1, 0, 0x2d3440);
+    addBox('pillarR', 0.2, 1.6, 0.4, 1.5, 1.1, 0, 0x2d3440);
+    addBox('topBeam', 3.2, 0.2, 0.4, 0, 1.8, 0, 0x2d3440);
+
+    addCyl('reelL', 0.4, 0.4, 0.15, 24, -1.0, 1.0, 0.1, 0x3b82f6, 0.2, 0.5, Math.PI/2);
+    addCyl('reelR', 0.4, 0.4, 0.15, 24, 1.0, 1.0, 0.1, 0x10b981, 0.2, 0.5, Math.PI/2);
+
+    addBox('cylBody', 0.3, 0.5, 0.3, 0, 1.45, 0, 0x475569, 0.6, 0.2);
+    addCyl('cylRod', 0.04, 0.04, 0.4, 12, 0, 1.1, 0, 0x94a3b8, 0.9, 0.1);
+    addBox('sealHead', 0.5, 0.15, 0.4, 0, 0.825, 0, 0xb91c1c, 0.4, 0.4);
+
+    addBox('carrier', 0.25, 0.08, 0.25, -1.0, 0.35, 0, 0x4b5563);
+    addBox('part', 0.12, 0.12, 0.12, -1.0, 0.45, 0, 0xa78bfa, 0.1, 0.3);
+    meshMap['part'].visible = false;
+
+    // ==================================================
+    // 📈 INTERFACE & LOGGING SYSTEM (ของนิว 100%)
+    // ==================================================
+    const logBox = document.getElementById('logBox');
+    window.addLog = function(msg, type='') {
+      const ln = document.createElement('div');
+      ln.className = `log-ln ${type}`;
+      ln.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      logBox.appendChild(ln);
+      logBox.scrollTop = logBox.scrollHeight;
+    };
+
+    // ==================================================
+    // 🌐 INTEGRATED WEBSOCKET & TIME MACHINE CHANNEL
+    // ==================================================
+    let socket;
+    let appMode = "LIVE";
+    let historicalTimeline = [];
+    let running = false;
+    let stepAllowed = false;
+    let cycles = 0;
+
+    // ฟังก์ชันอัปเดตสถานะปุ่มและ UI หลัก (ถอดมาจาก FSM เดิมของนิว)
+    function updateMachineStateUI(state, cycleCount, mode, isStepAllowed) {
+      document.getElementById('ovLabel').textContent = state;
+      document.getElementById('cCycles').textContent = cycleCount;
+      cycles = cycleCount;
+
+      // จัดการโหมดตัวอักษรบนปุ่ม Mode
+      document.getElementById('btnMode').textContent = `โหมด: ${mode.toUpperCase()}`;
+      
+      // ควบคุมการเปิดปิดปุ่มตัดสินใจ OK/NG
+      if(mode === 'semi' && isStepAllowed) {
+        document.getElementById('btnOK').disabled = false;
+        document.getElementById('btnNG').disabled = false;
+      } else {
+        document.getElementById('btnOK').disabled = true;
+        document.getElementById('btnNG').disabled = true;
+      }
+    }
+
+    // ฟังก์ชันขับเคลื่อนแอนิเมชัน 3D ตามสเตปจริง (ดึงลอจิกแอนิเมชันเดิมของนิวมาครอบ)
+    function trigger3DAnimation(state) {
+      // 1. เคลียร์แอนิเมชันที่ค้างอยู่
+      tweens.length = 0;
+
+      // 2. ดักจับและสั่งกลไกขยับโมเดลตามแต่ละขั้นตอน
+      if (state === 'INDEX') {
+        meshMap['part'].visible = false;
+        meshMap['carrier'].position.x = -1.0;
+        tweens.push({
+          update: (t) => {
+            meshMap['reelL'].rotation.y = t * Math.PI * 2;
+            meshMap['carrier'].position.x = -1.0 + t * 0.5;
+          }
+        });
+      }
+      else if (state === 'LOAD_PART') {
+        meshMap['part'].position.set(-0.5, 1.2, 0);
+        meshMap['part'].visible = true;
+        tweens.push({
+          update: (t) => {
+            meshMap['part'].position.y = 1.2 - t * 0.77;
+          }
+        });
+      }
+      else if (state === 'SEAL_DOWN') {
+        tweens.push({
+          update: (t) => {
+            const dy = t * 0.3;
+            meshMap['cylRod'].position.y = 1.1 - dy;
+            meshMap['sealHead'].position.y = 0.825 - dy;
+          }
+        });
+      }
+      else if (state === 'SEAL_UP') {
+        tweens.push({
+          update: (t) => {
+            const dy = (1 - t) * 0.3;
+            meshMap['cylRod'].position.y = 1.1 - dy;
+            meshMap['sealHead'].position.y = 0.825 - dy;
+          }
+        });
+      }
+      else if (state === 'ROLL') {
+        const startX = meshMap['carrier'].position.x;
+        tweens.push({
+          update: (t) => {
+            meshMap['reelR'].rotation.y = t * Math.PI * 2;
+            meshMap['carrier'].position.x = startX + t * 1.0;
+            if(meshMap['part'].visible) meshMap['part'].position.x = startX + t * 1.0;
+          }
+        });
+      }
+    }
+
+    // ฟังก์ชันถอดบิตพ่นสีบอร์ด I/O
     function updateIOBitsDisplay(ip0, op0) {
-        // อัปเดตเมทริกซ์ไฟฝั่งดิจิทัลอินพุต (IP)
-        for (let i = 0; i < 7; i++) {
-            const dot = document.getElementById(`ip-bit-${i}`);
-            if (dot) {
-                if ((ip0 & (1 << i)) !== 0) dot.classList.add("active-ip");
-                else dot.classList.remove("active-ip");
-            }
+      for (let i = 0; i < 7; i++) {
+        const el = document.getElementById(`ip${i}`);
+        if(el) {
+          if((ip0 & (1 << i)) !== 0) el.classList.add('active');
+          else el.classList.remove('active');
         }
-        // อัปเดตเมทริกซ์ไฟฝั่งดิจิทัลเอาท์พุต (OP)
-        for (let i = 0; i < 5; i++) {
-            const dot = document.getElementById(`op-bit-${i}`);
-            if (dot) {
-                if ((op0 & (1 << i)) !== 0) dot.classList.add("active-op");
-                else dot.classList.remove("active-op");
-            }
+      }
+      for (let i = 0; i < 5; i++) {
+        const el = document.getElementById(`op${i}`);
+        if(el) {
+          if((op0 & (1 << i)) !== 0) el.classList.add('active');
+          else el.classList.remove('active');
         }
+      }
     }
 
-    // ==================================================
-    // 🗜️ TIME MACHINE MODE LOGIC (Phase 6 Replay Core)
-    // ==================================================
-    function setAppMode(mode) {
-        appMode = mode;
-        const tabLive = document.getElementById("tab-live");
-        const tabReplay = document.getElementById("tab-replay");
-        const replayControls = document.getElementById("replay-controls");
-        const liveActionButtons = document.getElementById("live-action-buttons");
+    // ⏳ ลอจิกควบคุมระบบ Time Machine (Phase 6)
+    window.setAppMode = function(mode) {
+      appMode = mode;
+      const tabLive = document.getElementById("tab-live");
+      const tabReplay = document.getElementById("tab-replay");
+      const replayPanel = document.getElementById("replay-panel");
+      const liveActionButtons = document.getElementById("live-action-buttons");
+      const hdot = document.getElementById("hdot");
 
-        if (mode === "LIVE") {
-            tabLive.classList.add("active-live");
-            tabReplay.classList.remove("active-replay");
-            replayControls.style.display = "none";
-            liveActionButtons.style.style = "block";
-            document.getElementById("status-indicator").innerText = "Connected (Live)";
-            document.getElementById("status-indicator").style.background = "#28a745";
-        } else {
-            tabLive.classList.remove("active-live");
-            tabReplay.classList.add("active-replay");
-            replayControls.style.display = "block";
-            liveActionButtons.style.display = "none";
-            document.getElementById("status-indicator").innerText = "⏳ REPLAY MODE";
-            document.getElementById("status-indicator").style.background = "#ffc107";
-            document.getElementById("status-indicator").style.color = "#000";
-            requestSQLLogs(); // ร้องขอข้อมูลอดีตทันที
-        }
-    }
+      if (mode === "LIVE") {
+        tabLive.className = "mode-btn active-live";
+        tabReplay.className = "mode-btn";
+        replayPanel.style.display = "none";
+        hdot.className = "hdot online";
+        document.getElementById("hstatus").innerText = "Live Sync";
+        addLog("🔄 สลับเข้าสู่โหมดควบคุมหน้างานสด (Live Sync)", "sys");
+      } else {
+        tabLive.className = "mode-btn";
+        tabReplay.className = "mode-btn active-replay";
+        replayPanel.style.display = "flex";
+        hdot.className = "hdot replay-mode";
+        document.getElementById("hstatus").innerText = "Replay Mode";
+        addLog("⏳ สลับเข้าสู่โหมดไทม์แมชชีนย้อนดูอดีต (Replay SQL)", "sys");
+        requestSQLLogs();
+      }
+    };
 
-    function requestSQLLogs() {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ action: "GET_HISTORY" }));
-        }
-    }
+    window.requestSQLLogs = function() {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ action: "GET_HISTORY" }));
+      }
+    };
 
-    function onSliderMove(value) {
-        if (historicalTimeline.length === 0) return;
-        const dataLog = historicalTimeline[value];
-        
-        // บังคับเปลี่ยนการแสดงข้อมูลอดีต ณ จุดตัดเวลาลง UI เว็บ
-        document.getElementById("txt-replay-log").innerText = `สเตปอดีต: [${dataLog.state}] (รอบที่ ${dataLog.cycle})`;
-        
-        // ขยับฟังก์ชันโมเดล 3D จำลองพิกัดในอดีต
-        updateMachineUI(dataLog.state, dataLog.cycle, dataLog.mode, false);
-    }
+    window.onSliderMove = function(value) {
+      if (historicalTimeline.length === 0) return;
+      const log = historicalTimeline[value];
+      
+      document.getElementById("txt-replay-info").innerText = `สเตปอดีต: [${log.state}] (รอบที่ ${log.cycle})`;
+      
+      // อัปเดตข้อมูลตัวอักษรหน้าเว็บย้อนหลัง
+      updateMachineStateUI(log.state, log.cycle, log.mode, false);
+      // สั่งขยับโมเดล 3D ย้อนเวลา
+      trigger3DAnimation(log.state);
+    };
 
-    // ==================================================
-    // 🔌 CONTROLLER WEBSOCKET NETWORK LAYER
-    // ==================================================
+    // เชื่อมต่อระบบเครือข่ายเข้าหา Python Gateway
     function connectGateway() {
-        socket = new WebSocket("ws://localhost:8765");
+      socket = new WebSocket("ws://localhost:8765");
 
-        socket.onopen = function() {
-            document.getElementById("status-indicator").innerText = "Connected (Live Sync)";
-            document.getElementById("status-indicator").style.backgroundColor = "#28a745";
-            document.getElementById("status-indicator").style.color = "white";
-        };
+      socket.onopen = function() {
+        document.getElementById('hdot').className = 'hdot online';
+        document.getElementById('hstatus').textContent = 'Online';
+        addLog("🔌 เชื่อมต่อเซิร์ฟเวอร์ Python Gateway สำเร็จ", "ok");
+      };
 
-        socket.onmessage = function(event) {
-            const raw = JSON.parse(event.data);
-            
-            // 1. จัดการข้อมูลสดส่งมาจากเครื่องจักรจริง
-            if (raw.type === "LIVE_SYNC" && appMode === "LIVE") {
-                const sys = raw.system;
-                updateMachineUI(sys.current_state, sys.cycles, sys.mode, sys.step_allowed);
-                updateIOBitsDisplay(sys.ip0, sys.op0);
-            } 
-            // 2. จัดการข้อมูลประวัติดึงมาจากฐานข้อมูล SQL ดิบ
-            else if (raw.type === "HISTORY_RESPONSE") {
-                historicalTimeline = raw.data;
-                if (historicalTimeline.length === 0) {
-                    document.getElementById("txt-replay-log").innerText = "❌ ไม่มี Log ในฐานข้อมูล!";
-                    return;
-                }
-                
-                const slider = document.getElementById("replay-slider");
-                slider.max = historicalTimeline.length - 1;
-                slider.value = 0;
-                
-                document.getElementById("txt-start-time").innerText = historicalTimeline[0].time.split(" ")[1]; // ดึงเฉพาะส่วนเวลา
-                document.getElementById("txt-end-time").innerText = historicalTimeline[historicalTimeline.length - 1].time.split(" ")[1];
-                
-                onSliderMove(0);
-            }
-        };
+      socket.onmessage = function(event) {
+        const raw = JSON.parse(event.data);
+        
+        // 1. รับข้อมูลสดเรียบลไทม์ (Live Sync)
+        if (raw.type === "LIVE_SYNC" && appMode === "LIVE") {
+          const sys = raw.system;
+          
+          // ตรวจจับจังหวะสลับสเตปเพื่อพ่น Log ลงช่องขวาของนิว
+          if (document.getElementById('ovLabel').textContent !== sys.current_state) {
+            addLog(`🔄 ย้ายเข้าสู่ขั้นตอน: [${sys.current_state}]`, 'sys');
+            trigger3DAnimation(sys.current_state);
+          }
 
-        socket.onclose = function() {
-            document.getElementById("status-indicator").innerText = "Disconnected";
-            document.getElementById("status-indicator").style.backgroundColor = "#dc3545";
-            document.getElementById("status-indicator").style.color = "white";
-            setTimeout(connectGateway, 2000); // พยายามดึง Connection ต่อใหม่ออโต้ทุก 2 วินาที
-        };
-    }
-
-    // ฟังก์ชันสั่งคำสั่งปุ่มกดหลัก
-    function sendAction(actionName) {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ action: actionName }));
+          updateMachineStateUI(sys.current_state, sys.cycles, sys.mode, sys.step_allowed);
+          updateIOBitsDisplay(sys.ip0, sys.op0);
+        } 
+        // 2. รับข้อมูลประวัติตารางย้อนหลังจากเบส SQL (Replay)
+        else if (raw.type === "HISTORY_RESPONSE") {
+          historicalTimeline = raw.data;
+          if (historicalTimeline.length === 0) {
+            document.getElementById("txt-replay-info").innerText = "❌ ไม่มีข้อมูลใน SQL";
+            return;
+          }
+          
+          const slider = document.getElementById("replay-slider");
+          slider.max = historicalTimeline.length - 1;
+          slider.value = 0;
+          
+          document.getElementById("txt-start-time").innerText = historicalTimeline[0].time.split(" ")[1];
+          document.getElementById("txt-end-time").innerText = historicalTimeline[historicalTimeline.length - 1].time.split(" ")[1];
+          addLog(`📜 โหลดประวัติความสำเร็จ ${historicalTimeline.length} แถวจาก SQL เข้าสู่ไทม์ไลน์`, "ok");
+          onSliderMove(0);
         }
+      };
+
+      socket.onclose = function() {
+        document.getElementById('hdot').className = 'hdot';
+        document.getElementById('hstatus').textContent = 'Offline';
+        setTimeout(connectGateway, 2000);
+      };
     }
 
-    function toggleControlMode() {
-        const nextMode = (currentMode === "auto") ? "semi" : "auto";
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ action: "MODE", mode: nextMode }));
-        }
-    }
+    // --- ฟังก์ชันการผูกคำสั่งปุ่มกดคุมบอร์ดเดิมของนิวส่งกลับหา Python ---
+    window.fsmStart = function() {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ action: "START" }));
+      }
+    };
 
-    function sendDecision(isOk) {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ action: "DECISION", value: isOk }));
-        }
-    }
+    window.fsmReset = function() {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ action: "RESET" }));
+      }
+    };
 
-    function changeSpeed(multiplier) {
-        document.getElementById("speed-label").innerText = `Speed: ${multiplier}x`;
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ action: "SPEED", value: multiplier }));
-        }
-    }
+    window.toggleMode = function() {
+      const target = (currentMode === "auto") ? "semi" : "auto";
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ action: "MODE", mode: target }));
+      }
+    };
+
+    window.humanDecision = function(isOk) {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ action: "DECISION", value: isOk }));
+      }
+    };
+
+    let speedIdx = 1;
+    const speeds = [0.5, 1.0, 2.5];
+    window.cycleSpeed = function() {
+      speedIdx = (speedIdx + 1) % speeds.length;
+      const spd = speeds[speedIdx];
+      document.getElementById('btnSpeed').textContent = `ความเร็ว: ${spd}x`;
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ action: "SPEED", value: spd }));
+      }
+    };
 
     // ==================================================
-    // 🔄 MAIN THREE.JS RENDER LOOP
+    // 🔄 RENDER LOOP (ลูปวาดหน้าจอของนิว)
     // ==================================================
-    function animate() {
-        requestAnimationFrame(animate);
-        controls.update();
-        renderer.render(scene, camera);
+    let lastTime = 0;
+    function animLoop(now) {
+      requestAnimationFrame(animLoop);
+      
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      // ประมวลผลกลุ่มแอนิเมชันย่อยคงเดิม
+      tweens.forEach(tw => {
+        if(!tw.elapsed) tw.elapsed = 0;
+        tw.elapsed += dt * (appMode === "LIVE" ? speeds[speedIdx] : 1.0);
+        const progress = Math.min(tw.elapsed / 1.0, 1.0); // ยึดฐานเวลา 1 วินาทีสเกลตามเว็บนิว
+        tw.update(progress);
+      });
+
+      controls.update();
+      renderer.render(scene, camera);
     }
 
-    // สั่งเริ่มต้นระบบเว็บ
+    // เริ่มต้นเชื่อมต่อเครือข่ายและรันกราฟิก
     connectGateway();
-    animate();
+    requestAnimationFrame(animLoop);
 
-    // ดักจับจังหวะการยืดหดขนาดหน้าจอบราวเซอร์ออโต้
-    window.addEventListener('resize', onWindowResize, false);
-    function onWindowResize() {
-        camera.aspect = container.clientWidth / container.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
-    }
-</script>
+    window.addEventListener('resize', () => {
+      camera.aspect = container.clientWidth/container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+  </script>
 </body>
 </html>
