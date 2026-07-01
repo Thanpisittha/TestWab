@@ -4,124 +4,132 @@
   <meta charset="utf-8">
   <title>Demo — Digital Twin (Perfect Auto & Semi-Auto OK/NG System)</title>
   <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
-      }
-    }
+    {"imports":{
+      "three":"https://unpkg.com/three@0.158.0/build/three.module.js",
+      "three/addons/":"https://unpkg.com/three@0.158.0/examples/jsm/"
+    }}
   </script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    :root{\r      --bg:#0a0c0f;--surface:#111318;--surface2:#1a1d24;--border:#2a2d38;\r      --text:#e8eaf0;--muted:#6b7080;--teal:#00c9a7;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;\r    }
-    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;\r      display:grid;grid-template-columns:1fr 320px;grid-template-rows:48px 1fr;height:100vh;overflow:hidden}
-    header{grid-column:1/-1;display:flex;align-items:center;justify-content:between;padding:0 16px;\r      background:var(--surface);border-bottom:1px solid var(--border)}
-    .brand{font-weight:700;font-size:15px;letter-spacing:0.5px;display:flex;align-items:center;gap:8px}
+    :root{
+      --bg:#0a0c0f;--surface:#111318;--surface2:#1a1d24;--border:#2a2d38;
+      --text:#e8eaf0;--muted:#6b7080;--teal:#00c9a7;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;
+    }
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
+      display:grid;grid-template-columns:1fr 320px;grid-template-rows:48px 1fr;height:100vh;overflow:hidden}
+    header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:0 16px;
+      background:var(--surface);border-bottom:1px solid var(--border)}
+    .brand{font-weight:700;font-size:14px;letter-spacing:0.5px;display:flex;align-items:center;gap:8px}
     .brand span{color:var(--teal)}
-    .status-bar{display:flex;align-items:center;gap:16px;margin-left:auto}
-    .hstatus-wrap{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--muted)}
-    .hdot{width:8px;height:8px;border-radius:50%;background:#ef4444;transition:background 0.3s}
-    .hdot.online{background:var(--teal);box-shadow:0 0 8px var(--teal)}
-    .hdot.replay-mode {background:var(--purple);box-shadow:0 0 8px var(--purple)}
     main{position:relative;background:#0d0f14}
     #c3d{width:100%;height:100%}
-    .overlay-hud{position:absolute;top:12px;left:12px;background:rgba(17,19,24,0.85);\r      padding:12px 16px;border-radius:6px;border:1px solid var(--border);backdrop-filter:blur(4px);\r      pointer-events:none;display:flex;flex-direction:column;gap:4px}
-    .hud-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600}
+    .overlay-hud{position:absolute;top:12px;left:12px;background:rgba(17,19,24,0.85);
+      padding:12px 16px;border-radius:6px;border:1px solid var(--border);backdrop-filter:blur(4px);
+      pointer-events:none;display:flex;flex-direction:column;gap:4px}
+    .hud-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600}
     .hud-val{font-size:20px;font-weight:700;font-family:monospace;color:var(--teal)}
+    .hud-status-node{display:flex;align-items:center;gap:6px;margin-top:2px}
+    .hdot{width:8px;height:8px;border-radius:50%;background:#ef4444;transition:background 0.3s}
+    .hdot.online{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+    .hdot.replay-mode{background:var(--purple);box-shadow:0 0 8px var(--purple)}
+    #hstatus{font-size:12px;font-weight:600;color:var(--text)}
     
-    sidebar{background:var(--surface);border-left:1px solid var(--border);padding:16px;\r      display:flex;flex-direction:column;gap:16px;overflow-y:auto}
-    .panel{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;\r      display:flex;flex-direction:column;gap:10px}
-    .panel-h{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--muted);\r      margin-bottom:2px;display:flex;justify-content:between;align-items:center}
-    .btn{background:var(--border);color:var(--text);border:none;padding:8px 12px;border-radius:4px;\r      font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;\r      gap:6px;transition:all 0.15s ease}
+    sidebar{background:var(--surface);border-left:1px solid var(--border);padding:16px;
+      display:flex;flex-direction:column;gap:14px;overflow-y:auto}
+    .panel{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;
+      display:flex;flex-direction:column;gap:8px}
+    .panel-h{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--muted);
+      margin-bottom:2px;display:flex;justify-content:space-between;align-items:center}
+    .panel-h span{font-family:monospace;color:var(--text);background:var(--border);padding:2px 6px;border-radius:3px;font-size:9px}
+    
+    .btn{background:var(--border);color:var(--text);border:none;padding:8px 12px;border-radius:4px;
+      font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+      gap:6px;transition:all 0.15s ease;width:100%}
     .btn:hover{filter:brightness(1.15)}
-    .btn:disabled{opacity:0.4;cursor:not-allowed;filter:none}
+    .btn:disabled{opacity:0.3;cursor:not-allowed;filter:none}
     .btn-primary{background:var(--teal);color:#05070a}
-    .btn-danger{background:var(--red);color:#05070a}
     
-    .grid-io{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-    .si{background:var(--surface);border:1px solid var(--border);padding:6px 4px;border-radius:4px;\r      text-align:center;font-size:10px;font-weight:700;color:var(--muted);transition:all 0.2s}
-    .si.active.ip{background:rgba(251,191,36,0.15);color:var(--amber);border-color:var(--amber)}
-    .si.active.op{background:rgba(0,201,167,0.15);color:var(--teal);border-color:var(--teal)}
+    .grid-io{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+    .si{background:var(--surface);border:1px solid var(--border);padding:4px 2px;border-radius:4px;
+      text-align:center;font-size:9px;font-weight:700;color:var(--muted);transition:all 0.15s}
+    .si.active.ip{background:rgba(251,191,36,0.15);color:var(--amber);border-color:var(--amber);box-shadow:0 0 4px rgba(251,191,36,0.2)}
+    .si.active.op{background:rgba(0,201,167,0.15);color:var(--teal);border-color:var(--teal);box-shadow:0 0 4px rgba(0,201,167,0.2)}
     
-    .log-box{height:160px;background:var(--surface);border:1px solid var(--border);border-radius:4px;\r      padding:6px;overflow-y:auto;font-family:monospace;font-size:11px;display:flex;flex-direction:column;gap:4px}
-    .log-ln{line-height:1.4;color:#9ca3af}
+    .log-box{height:150px;background:var(--surface);border:1px solid var(--border);border-radius:4px;
+      padding:6px;overflow-y:auto;font-family:monospace;font-size:11px;display:flex;flex-direction:column;gap:4px;flex:1}
+    .log-ln{line-height:1.3;color:#9ca3af}
     .log-ln.sys{color:var(--purple)}
     .log-ln.ok{color:var(--teal)}
     .log-ln.err{color:var(--red)}
     .log-ln.warn{color:var(--amber)}
 
-    /* ⏳ สไตล์เพิ่มเติมสำหรับแผง Time Machine (Phase 6) */
-    .mode-selector { display: flex; gap: 4px; margin-bottom: 4px; }
-    .mode-btn { flex: 1; padding: 6px; font-size: 11px; font-weight: bold; border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 4px; cursor: pointer; }
-    .mode-btn.active-live { background: var(--teal); color: #000; border-color: var(--teal); }
-    .mode-btn.active-replay { background: var(--purple); color: white; border-color: var(--purple); }
-    .slider-style { width: 100%; margin: 8px 0; -webkit-appearance: none; background: var(--border); height: 4px; border-radius: 2px; outline: none; }
+    /* ⏳ แผงควบคุมระบบ Replay ไทม์แมชชีน */
+    .mode-tabs { display: flex; gap: 4px; margin-bottom: 4px; }
+    .tab-btn { flex: 1; padding: 6px; font-size: 10px; font-weight: bold; background: var(--surface); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; cursor: pointer; }
+    .tab-btn.active-live { background: var(--teal); color: #000; border-color: var(--teal); }
+    .tab-btn.active-rep { background: var(--purple); color: #fff; border-color: var(--purple); }
+    .slider-style { width: 100%; margin: 6px 0; -webkit-appearance: none; background: var(--border); height: 4px; border-radius: 2px; outline: none; }
     .slider-style::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--purple); cursor: pointer; }
   </style>
 </head>
 <body>
 
   <header>
-    <div class="brand">⚙️ <span>SCHAFFNER</span> DIGITAL TWIN</div>
-    <div class="status-bar">
-      <div class="hstatus-wrap">
-        <div id="hdot" class="hdot"></div>
-        <span id="hstatus">Offline</span>
-      </div>
-    </div>
+    <div class="brand">📦 STATION TWIN — <span>OP-PACK05</span></div>
   </header>
 
   <main>
     <div id="c3d"></div>
     <div class="overlay-hud">
-      <div class="hud-title">OVERVIEW PROCESS</div>
-      <div id="ovLabel" class="hud-val">IDLE / READY</div>
+      <div class="hud-title">Current Machine State</div>
+      <div id="ovLabel" class="hud-val">IDLE</div>
+      <div class="hud-status-node">
+        <div id="hdot" class="hdot"></div>
+        <span id="hstatus">Idle</span>
+      </div>
     </div>
   </main>
 
   <sidebar>
     <div class="panel">
-      <div class="panel-h">⏳ TIME MACHINE CONTROL</div>
-      <div class="mode-selector">
-        <button id="tab-live" class="mode-btn active-live" onclick="setAppMode('LIVE')">🔴 LIVE SYNC</button>
-        <button id="tab-replay" class="mode-btn" onclick="setAppMode('REPLAY')">⏳ REPLAY SQL</button>
+      <div class="panel-h">⏳ DIGITAL TWIN TIME MACHINE</div>
+      <div class="mode-tabs">
+        <button id="mode-live-btn" class="tab-btn active-live" onclick="switchTwinMode('LIVE')">🔴 LIVE MONITOR</button>
+        <button id="mode-rep-btn" class="tab-btn" onclick="switchTwinMode('REPLAY')">⏳ REPLAY SQL</button>
       </div>
-      <div id="replay-panel" style="display: none; flex-direction: column; gap: 6px;">
-        <button class="btn" style="background: var(--surface); font-size: 11px;" onclick="requestSQLLogs()">🔄 ดึงประวัติจาก SQL</button>
-        <input type="range" id="replay-slider" class="slider-style" min="0" max="0" value="0" oninput="onSliderMove(this.value)">
-        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-family: monospace;">
-          <span id="txt-start-time">-</span>
-          <span id="txt-end-time">-</span>
-        </div>
-        <div id="txt-replay-info" style="font-size: 11px; color: var(--purple); text-align: center; font-weight: bold; background: var(--surface); padding: 4px; border-radius: 4px;">
-          สเตปอดีต: รอโหลด...
+      <div id="replay-sub-panel" style="display: none; flex-direction: column; gap: 4px;">
+        <button class="btn" style="background: var(--surface); font-size: 11px; padding: 4px;" onclick="loadSqlHistory()">🔄 Load Log from SQL</button>
+        <input type="range" id="rep-slider" class="slider-style" min="0" max="0" value="0" oninput="slideHistory(this.value)">
+        <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); font-family: monospace;">
+          <span id="rep-start-t">-</span>
+          <span id="rep-end-t">-</span>
         </div>
       </div>
     </div>
 
     <div class="panel">
-      <div class="panel-h">📦 STATION CONTROL <span>OP-PACK05</span></div>
+      <div class="panel-h">📦 AUTOMATION CONTROLLER</div>
       <button id="btnStart" class="btn btn-primary" onclick="fsmStart()">▶ START SYSTEM</button>
       
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
         <button id="btnMode" class="btn" onclick="toggleMode()">โหมด: AUTO</button>
         <button id="btnSpeed" class="btn" onclick="cycleSpeed()">ความเร็ว: 1x</button>
       </div>
 
-      <div style="background:rgba(0,0,0,0.2);padding:8px;border-radius:4px;border:1px dashed var(--border)">
-        <div class="panel-h" style="font-size:10px;margin-bottom:6px">🕹️ SEMI-AUTO DECISION</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:rgba(0,0,0,0.15);padding:8px;border-radius:4px;border:1px dashed var(--border)">
+        <div class="panel-h" style="font-size:9px;margin-bottom:4px">🕹️ SEMI-AUTO CHECKPOINT DECISION</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
           <button id="btnOK" class="btn" style="background:#065f46;color:#a7f3d0" onclick="humanDecision(true)" disabled>👍 OK</button>
           <button id="btnNG" class="btn" style="background:#991b1b;color:#fca5a5" onclick="humanDecision(false)" disabled>👎 NG</button>
         </div>
       </div>
 
-      <button id="btnReset" class="btn btn-danger" onclick="fsmReset()" disabled>↺ RESET ALARM</button>
+      <button id="btnReset" class="btn btn-danger" onclick="fsmReset()" disabled>↺ RESET SYSTEM ALARM</button>
     </div>
 
     <div class="panel">
-      <div class="panel-h">📈 MONITORING</div>
-      <div style="display:flex;justify-content:space-between;font-size:13px">
+      <div class="panel-h">📈 PRODUCTION MONITOR</div>
+      <div style="display:flex;justify-content:between;font-size:12px">
         <span style="color:var(--muted)">Cycles Completed:</span>
         <span id="cCycles" style="font-weight:700;color:var(--teal)">0</span>
       </div>
@@ -162,7 +170,7 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     // ==================================================
-    // 📦 THREE.JS SCENE INITIALIZATION (ของนิว 100%)
+    // 📦 THREE.JS WORLD SETUP (ของนิว 100%)
     // ==================================================
     const container = document.getElementById('c3d');
     const scene = new THREE.Scene();
@@ -185,7 +193,6 @@
     controls.maxPolarAngle = Math.PI/2 - 0.02;
     controls.target.set(0, 0.5, 0);
 
-    // แสงสว่างในแบบจำลองของนิว
     const ambientLight = new THREE.AmbientLight(0x1a202c, 1.2);
     scene.add(ambientLight);
 
@@ -201,7 +208,6 @@
     pointLight.position.set(0, 1.5, 0);
     scene.add(pointLight);
 
-    // สร้างพื้นสไตล์นิว
     const floorGeo = new THREE.PlaneGeometry(20, 20);
     const floorMat = new THREE.MeshStandardMaterial({ color:0x0f1115, roughness:0.7, metalness:0.1 });
     const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -214,7 +220,7 @@
     scene.add(grid);
 
     // ==================================================
-    // 🏗️ MESH GENERATION (ส่วนประกอบโมเดล 3D เดิมของนิว)
+    // 🏗️ MESH COMPONENTS ASSEMBLY (ของนิว 100%)
     // ==================================================
     const meshMap = {};
     const origPos = {};
@@ -246,7 +252,6 @@
       return mesh;
     }
 
-    // ประกอบชิ้นงานตามแบบจำลองของนิวเป๊ะ ๆ
     addBox('base', 3.4, 0.3, 1.2, 0, 0.15, 0, 0x1e222b, 0.5, 0.4);
     addBox('pillarL', 0.2, 1.6, 0.4, -1.5, 1.1, 0, 0x2d3440);
     addBox('pillarR', 0.2, 1.6, 0.4, 1.5, 1.1, 0, 0x2d3440);
@@ -264,8 +269,23 @@
     meshMap['part'].visible = false;
 
     // ==================================================
-    // 📈 INTERFACE & LOGGING SYSTEM (ของนิว 100%)
+    // ⚙️ ORIGINAL FSM ENGINE LOGIC (ดั้งเดิมของนิว 100%)
     // ==================================================
+    const STATES = [
+      'INIT','READY','SET_PARAMS','INDEX','CHECK_CARRIER',
+      'LOAD_PART','VISION','COUNT_CHECK','FEED_COVER',
+      'CHECK_TEMP','SEAL_DOWN','SEAL_UP','VISION_QC','ROLL'
+    ];
+    
+    let current = 'READY';
+    let running = false;
+    let mode = 'auto'; 
+    let stepAllowed = false;
+    let cycles = 0;
+    let timer = null;
+    let speedIdx = 1;
+    const speeds = [0.5, 1.0, 2.5];
+
     const logBox = document.getElementById('logBox');
     window.addLog = function(msg, type='') {
       const ln = document.createElement('div');
@@ -275,52 +295,81 @@
       logBox.scrollTop = logBox.scrollHeight;
     };
 
-    // ==================================================
-    // 🌐 INTEGRATED WEBSOCKET & TIME MACHINE CHANNEL
-    // ==================================================
-    let socket;
-    let appMode = "LIVE";
-    let historicalTimeline = [];
-    let running = false;
-    let stepAllowed = false;
-    let cycles = 0;
-
-    // ฟังก์ชันอัปเดตสถานะปุ่มและ UI หลัก (ถอดมาจาก FSM เดิมของนิว)
-    function updateMachineStateUI(state, cycleCount, mode, isStepAllowed) {
-      document.getElementById('ovLabel').textContent = state;
-      document.getElementById('cCycles').textContent = cycleCount;
-      cycles = cycleCount;
-
-      // จัดการโหมดตัวอักษรบนปุ่ม Mode
-      document.getElementById('btnMode').textContent = `โหมด: ${mode.toUpperCase()}`;
-      
-      // ควบคุมการเปิดปิดปุ่มตัดสินใจ OK/NG
-      if(mode === 'semi' && isStepAllowed) {
-        document.getElementById('btnOK').disabled = false;
-        document.getElementById('btnNG').disabled = false;
-      } else {
-        document.getElementById('btnOK').disabled = true;
-        document.getElementById('btnNG').disabled = true;
+    function setIO(ipBits, opBits) {
+      for(let i=0; i<7; i++){
+        const el = document.getElementById(`ip${i}`);
+        if(el){
+          if(ipBits & (1<<i)) el.classList.add('active');
+          else el.classList.remove('active');
+        }
+      }
+      for(let i=0; i<5; i++){
+        const el = document.getElementById(`op${i}`);
+        if(el){
+          if(opBits & (1<<i)) el.classList.add('active');
+          else el.classList.remove('active');
+        }
       }
     }
 
-    // ฟังก์ชันขับเคลื่อนแอนิเมชัน 3D ตามสเตปจริง (ดึงลอจิกแอนิเมชันเดิมของนิวมาครอบ)
-    function trigger3DAnimation(state) {
-      // 1. เคลียร์แอนิเมชันที่ค้างอยู่
-      tweens.length = 0;
+    function setState(nextState) {
+      current = nextState;
+      if(twinAppMode === "LIVE") {
+        document.getElementById('ovLabel').textContent = current;
+      }
+      addLog(`🔄 ย้ายเข้าสู่ขั้นตอน: [${current}]`, 'sys');
 
-      // 2. ดักจับและสั่งกลไกขยับโมเดลตามแต่ละขั้นตอน
-      if (state === 'INDEX') {
+      tweens.length = 0; 
+      setIO(0,0);
+
+      const checkpoints = ['CHECK_CARRIER','VISION','COUNT_CHECK','CHECK_TEMP','VISION_QC'];
+      if(mode === 'semi' && checkpoints.includes(current) && !stepAllowed) {
+        document.getElementById('hdot').className = 'hdot online';
+        document.getElementById('hstatus').textContent = 'WAITING HUMAN APPROVED';
+        document.getElementById('btnOK').disabled = false;
+        document.getElementById('btnNG').disabled = false;
+        return; 
+      }
+
+      document.getElementById('btnOK').disabled = true;
+      document.getElementById('btnNG').disabled = true;
+      if(running) {
+        document.getElementById('hdot').className = 'hdot online';
+        document.getElementById('hstatus').textContent = 'RUNNING (AUTO)';
+      }
+
+      let delay = 1000;
+
+      if(current === 'INIT') {
+        delay = 500;
+        setIO(0,0);
+      }
+      else if(current === 'READY') {
+        delay = 500;
+      }
+      else if(current === 'SET_PARAMS') {
+        delay = 500;
+      }
+      else if(current === 'INDEX') {
+        delay = 1000;
+        setIO(0, 0x01); // out_motor_index (ขา 40021)
         meshMap['part'].visible = false;
         meshMap['carrier'].position.x = -1.0;
         tweens.push({
           update: (t) => {
-            meshMap['reelL'].rotation.y = t * Math.PI * 2;
-            meshMap['carrier'].position.x = -1.0 + t * 0.5;
+            meshMap['reelL'].rotation.y = t * Math.PI*2;
+            meshMap['carrier'].position.x = -1.0 + t*0.5;
           }
         });
       }
-      else if (state === 'LOAD_PART') {
+      else if(current === 'CHECK_CARRIER') {
+        delay = 500;
+        setIO(0x01, 0); // is_carrier_present (ขา 40011)
+        meshMap['carrier'].position.x = -0.5;
+      }
+      else if(current === 'LOAD_PART') {
+        delay = 1200;
+        setIO(0x02, 0); // is_part_loaded (ขา 40012)
         meshMap['part'].position.set(-0.5, 1.2, 0);
         meshMap['part'].visible = true;
         tweens.push({
@@ -329,7 +378,26 @@
           }
         });
       }
-      else if (state === 'SEAL_DOWN') {
+      else if(current === 'VISION') {
+        delay = 600;
+        setIO(0x04, 0); // vision_trigger_ok (ขา 40013)
+        meshMap['part'].position.set(-0.5, 0.43, 0);
+      }
+      else if(current === 'COUNT_CHECK') {
+        delay = 500;
+        setIO(0x02, 0);
+      }
+      else if(current === 'FEED_COVER') {
+        delay = 800;
+        setIO(0, 0x10); // out_feed_cyl (ขา 40025)
+      }
+      else if(current === 'CHECK_TEMP') {
+        delay = 500;
+        setIO(0x08, 0); // temp_is_ok (ขา 40014)
+      }
+      else if(current === 'SEAL_DOWN') {
+        delay = 1000;
+        setIO(0x20, 0x04); // out_seal_cyl (ขา 40023) + in_cyl_down (ขา 40016)
         tweens.push({
           update: (t) => {
             const dy = t * 0.3;
@@ -338,203 +406,200 @@
           }
         });
       }
-      else if (state === 'SEAL_UP') {
+      else if(current === 'SEAL_UP') {
+        delay = 1000;
+        setIO(0x40, 0); // in_cyl_up (ขา 40017)
         tweens.push({
           update: (t) => {
-            const dy = (1 - t) * 0.3;
+            const dy = (1-t)*0.3;
             meshMap['cylRod'].position.y = 1.1 - dy;
             meshMap['sealHead'].position.y = 0.825 - dy;
           }
         });
       }
-      else if (state === 'ROLL') {
+      else if(current === 'VISION_QC') {
+        delay = 600;
+        setIO(0x10, 0); // qc_pass_signal (ขา 40015)
+      }
+      else if(current === 'ROLL') {
+        delay = 1200;
+        setIO(0, 0x02); // out_motor_roll2 (ขา 40022)
         const startX = meshMap['carrier'].position.x;
         tweens.push({
           update: (t) => {
-            meshMap['reelR'].rotation.y = t * Math.PI * 2;
-            meshMap['carrier'].position.x = startX + t * 1.0;
-            if(meshMap['part'].visible) meshMap['part'].position.x = startX + t * 1.0;
+            meshMap['reelR'].rotation.y = t * Math.PI*2;
+            meshMap['carrier'].position.x = startX + t*1.0;
+            if(meshMap['part'].visible) meshMap['part'].position.x = startX + t*1.0;
           }
         });
       }
+
+      if(!running) return;
+      const actualDelay = delay / speeds[speedIdx];
+      timer = setTimeout(() => {
+        stepAllowed = false;
+        const idx = STATES.indexOf(current);
+        let nxt = STATES[(idx + 1) % STATES.length];
+        if(nxt === 'INIT') {
+          cycles++;
+          document.getElementById('cCycles').textContent = cycles;
+          nxt = 'INDEX';
+        }
+        setState(nxt);
+      }, actualDelay);
     }
 
-    // ฟังก์ชันถอดบิตพ่นสีบอร์ด I/O
-    function updateIOBitsDisplay(ip0, op0) {
-      for (let i = 0; i < 7; i++) {
-        const el = document.getElementById(`ip${i}`);
-        if(el) {
-          if((ip0 & (1 << i)) !== 0) el.classList.add('active');
-          else el.classList.remove('active');
-        }
-      }
-      for (let i = 0; i < 5; i++) {
-        const el = document.getElementById(`op${i}`);
-        if(el) {
-          if((op0 & (1 << i)) !== 0) el.classList.add('active');
-          else el.classList.remove('active');
-        }
-      }
-    }
-
-    // ⏳ ลอจิกควบคุมระบบ Time Machine (Phase 6)
-    window.setAppMode = function(mode) {
-      appMode = mode;
-      const tabLive = document.getElementById("tab-live");
-      const tabReplay = document.getElementById("tab-replay");
-      const replayPanel = document.getElementById("replay-panel");
-      const liveActionButtons = document.getElementById("live-action-buttons");
-      const hdot = document.getElementById("hdot");
-
-      if (mode === "LIVE") {
-        tabLive.className = "mode-btn active-live";
-        tabReplay.className = "mode-btn";
-        replayPanel.style.display = "none";
-        hdot.className = "hdot online";
-        document.getElementById("hstatus").innerText = "Live Sync";
-        addLog("🔄 สลับเข้าสู่โหมดควบคุมหน้างานสด (Live Sync)", "sys");
-      } else {
-        tabLive.className = "mode-btn";
-        tabReplay.className = "mode-btn active-replay";
-        replayPanel.style.display = "flex";
-        hdot.className = "hdot replay-mode";
-        document.getElementById("hstatus").innerText = "Replay Mode";
-        addLog("⏳ สลับเข้าสู่โหมดไทม์แมชชีนย้อนดูอดีต (Replay SQL)", "sys");
-        requestSQLLogs();
+    window.toggleMode = function(){
+      mode = (mode === 'auto') ? 'semi' : 'auto';
+      document.getElementById('btnMode').textContent = `โหมด: ${mode.toUpperCase()}`;
+      addLog(`🕹️ สลับโหมดควบคุมภายในแผงวงจรเป็น: ${mode.toUpperCase()}`, 'warn');
+      if(mode === 'auto' && timer === null && running) {
+        stepAllowed = false;
+        const idx = STATES.indexOf(current);
+        setState(STATES[(idx + 1) % STATES.length]);
       }
     };
 
-    window.requestSQLLogs = function() {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ action: "GET_HISTORY" }));
-      }
-    };
-
-    window.onSliderMove = function(value) {
-      if (historicalTimeline.length === 0) return;
-      const log = historicalTimeline[value];
-      
-      document.getElementById("txt-replay-info").innerText = `สเตปอดีต: [${log.state}] (รอบที่ ${log.cycle})`;
-      
-      // อัปเดตข้อมูลตัวอักษรหน้าเว็บย้อนหลัง
-      updateMachineStateUI(log.state, log.cycle, log.mode, false);
-      // สั่งขยับโมเดล 3D ย้อนเวลา
-      trigger3DAnimation(log.state);
-    };
-
-    // เชื่อมต่อระบบเครือข่ายเข้าหา Python Gateway
-    function connectGateway() {
-      socket = new WebSocket("ws://localhost:8765");
-
-      socket.onopen = function() {
-        document.getElementById('hdot').className = 'hdot online';
-        document.getElementById('hstatus').textContent = 'Online';
-        addLog("🔌 เชื่อมต่อเซิร์ฟเวอร์ Python Gateway สำเร็จ", "ok");
-      };
-
-      socket.onmessage = function(event) {
-        const raw = JSON.parse(event.data);
-        
-        // 1. รับข้อมูลสดเรียบลไทม์ (Live Sync)
-        if (raw.type === "LIVE_SYNC" && appMode === "LIVE") {
-          const sys = raw.system;
-          
-          // ตรวจจับจังหวะสลับสเตปเพื่อพ่น Log ลงช่องขวาของนิว
-          if (document.getElementById('ovLabel').textContent !== sys.current_state) {
-            addLog(`🔄 ย้ายเข้าสู่ขั้นตอน: [${sys.current_state}]`, 'sys');
-            trigger3DAnimation(sys.current_state);
-          }
-
-          updateMachineStateUI(sys.current_state, sys.cycles, sys.mode, sys.step_allowed);
-          updateIOBitsDisplay(sys.ip0, sys.op0);
-        } 
-        // 2. รับข้อมูลประวัติตารางย้อนหลังจากเบส SQL (Replay)
-        else if (raw.type === "HISTORY_RESPONSE") {
-          historicalTimeline = raw.data;
-          if (historicalTimeline.length === 0) {
-            document.getElementById("txt-replay-info").innerText = "❌ ไม่มีข้อมูลใน SQL";
-            return;
-          }
-          
-          const slider = document.getElementById("replay-slider");
-          slider.max = historicalTimeline.length - 1;
-          slider.value = 0;
-          
-          document.getElementById("txt-start-time").innerText = historicalTimeline[0].time.split(" ")[1];
-          document.getElementById("txt-end-time").innerText = historicalTimeline[historicalTimeline.length - 1].time.split(" ")[1];
-          addLog(`📜 โหลดประวัติความสำเร็จ ${historicalTimeline.length} แถวจาก SQL เข้าสู่ไทม์ไลน์`, "ok");
-          onSliderMove(0);
-        }
-      };
-
-      socket.onclose = function() {
-        document.getElementById('hdot').className = 'hdot';
-        document.getElementById('hstatus').textContent = 'Offline';
-        setTimeout(connectGateway, 2000);
-      };
-    }
-
-    // --- ฟังก์ชันการผูกคำสั่งปุ่มกดคุมบอร์ดเดิมของนิวส่งกลับหา Python ---
-    window.fsmStart = function() {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ action: "START" }));
-      }
-    };
-
-    window.fsmReset = function() {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ action: "RESET" }));
-      }
-    };
-
-    window.toggleMode = function() {
-      const target = (currentMode === "auto") ? "semi" : "auto";
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ action: "MODE", mode: target }));
-      }
+    window.cycleSpeed = function(){
+      speedIdx = (speedIdx + 1) % speeds.length;
+      document.getElementById('btnSpeed').textContent = `ความเร็ว: ${speeds[speedIdx]}x`;
     };
 
     window.humanDecision = function(isOk) {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ action: "DECISION", value: isOk }));
+      if(!running || mode !== 'semi') return;
+      if(isOk) {
+        addLog(`👍 HUMAN APPROVED: ยืนยันปล่อยผ่านขั้นตอน [${current}]`, 'ok');
+        stepAllowed = true;
+        const idx = STATES.indexOf(current);
+        let nxt = STATES[(idx + 1) % STATES.length];
+        if(nxt === 'INIT') {
+          cycles++; document.getElementById('cCycles').textContent = cycles; nxt = 'INDEX';
+        }
+        setState(nxt);
+      } else {
+        clearTimeout(timer); running = false; stepAllowed = false;
+        document.getElementById('hdot').className = 'hdot';
+        document.getElementById('hstatus').textContent = 'STOPPED (NG TRIPPED)';
+        document.getElementById('ovLabel').textContent = "🚨 CRITICAL NG ALERT";
+        addLog(`❌ QUALITY ERROR [${current}]: ชิ้นงานไม่ผ่านเกณฑ์ (NG)! ตัดสัญญาณสวิตช์เครื่องจักรหยุดทันที`, 'err');
       }
+    }
+
+    window.fsmStart = function(){ 
+      if(running) return; 
+      running=true; 
+      stepAllowed = false;
+      setState('INIT'); 
+      document.getElementById('btnStart').disabled=true; 
+      document.getElementById('btnReset').disabled=false; 
     };
 
-    let speedIdx = 1;
-    const speeds = [0.5, 1.0, 2.5];
-    window.cycleSpeed = function() {
-      speedIdx = (speedIdx + 1) % speeds.length;
-      const spd = speeds[speedIdx];
-      document.getElementById('btnSpeed').textContent = `ความเร็ว: ${spd}x`;
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ action: "SPEED", value: spd }));
-      }
+    window.fsmReset = function(){
+      clearTimeout(timer); running=false; stepAllowed=false; cycles=0; document.getElementById('cCycles').textContent=0;
+      tweens.length=0;
+      Object.keys(meshMap).forEach(role=>{\r        const m=meshMap[role]; if(m && origPos[role]){ m.position.copy(origPos[role]); if(m._origRot) m.rotation.copy(m._origRot); }\r      });
+      document.getElementById('btnStart').disabled=false; document.getElementById('btnReset').disabled=true;
+      document.getElementById('btnOK').disabled=true; document.getElementById('btnNG').disabled=true;
+      document.getElementById('hdot').className='hdot'; document.getElementById('hstatus').textContent='Idle';
+      document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','ip','op'));
+      document.querySelectorAll('.si.ip').forEach(e=>e.classList.add('ip'));
+      document.querySelectorAll('.si.op').forEach(e=>e.classList.add('op'));
+      document.getElementById('ovLabel').textContent = "IDLE";
+      addLog("↺ รีเซ็ตระบบ คืนค่าตำแหน่งมอเตอร์และกระบอกสูบหลักเริ่มต้น", "warn");
     };
 
     // ==================================================
-    // 🔄 RENDER LOOP (ลูปวาดหน้าจอของนิว)
+    // 🔌 INTEGRATED WEBSOCKET & REPLAY LAYER (Phase 6)
+    // ==================================================
+    let ws;
+    let twinAppMode = "LIVE";
+
+    window.switchTwinMode = function(targetMode) {
+      twinAppMode = targetMode;
+      const liveBtn = document.getElementById("mode-live-btn");
+      const repBtn = document.getElementById("mode-rep-btn");
+      const subPanel = document.getElementById("replay-sub-panel");
+
+      if (targetMode === "LIVE") {
+        liveBtn.className = "tab-btn active-live";
+        repBtn.className = "tab-btn";
+        subPanel.style.display = "none";
+        document.getElementById('ovLabel').textContent = current;
+        addLog("🟢 เปิดหน้าจอ Live Monitor ลิงค์พิกัดปัจจุบัน", "ok");
+      } else {
+        liveBtn.className = "tab-btn";
+        repBtn.className = "tab-btn active-rep";
+        subPanel.style.display = "flex";
+        addLog("⏳ เปิดระบบ Time Machine ค้นหาประวัติ SQL", "sys");
+        loadSqlHistory();
+      }
+    };
+
+    window.loadSqlHistory = function() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: "GET_HISTORY" }));
+      }
+    };
+
+    window.slideHistory = function(val) {
+      if (historicalTimeline.length === 0) return;
+      const log = historicalTimeline[val];
+      
+      // แสดงข้อมูลอดีตบน UI โดยไม่พังลอจิกแอนิเมชันที่คอมพิวเตอร์กำลังรันอยู่
+      document.getElementById('ovLabel').textContent = `[OLD] ${log.state}`;
+      addLog(`🕒 Replay Event Log -> State: ${log.state} | Cycle: ${log.cycle} | Time: ${log.time}`, "sys");
+    };
+
+    function initWebSocket() {
+      ws = new WebSocket("ws://localhost:8765");
+
+      ws.onopen = () => {
+        addLog("⚡ เชื่อมต่อท่อดาต้าเบสหลังบ้านเสร็จสมบูรณ์", "ok");
+      };
+
+      ws.onmessage = (event) => {
+        const raw = JSON.parse(event.data);
+        
+        if (raw.type === "HISTORY_RESPONSE") {
+          historicalTimeline = raw.data;
+          if (historicalTimeline.length === 0) return;
+
+          const slider = document.getElementById("rep-slider");
+          slider.max = historicalTimeline.length - 1;
+          slider.value = 0;
+
+          document.getElementById("rep-start-t").innerText = historicalTimeline[0].time.split(" ")[1];
+          document.getElementById("rep-end-t").innerText = historicalTimeline[historicalTimeline.length - 1].time.split(" ")[1];
+          addLog(`📜 โหลดข้อมูลดิบ ${historicalTimeline.length} แถวจาก SQL ดาต้าเบสแล้ว`, "ok");
+        }
+      };
+
+      ws.onclose = () => {
+        setTimeout(initWebSocket, 2000);
+      };
+    }
+
+    initWebSocket();
+
+    // ==================================================
+    // 🔄 RENDER LOOP (คงเดิมของนิว 100%)
     // ==================================================
     let lastTime = 0;
     function animLoop(now) {
       requestAnimationFrame(animLoop);
-      
       const dt = (now - lastTime) / 1000;
       lastTime = now;
 
-      // ประมวลผลกลุ่มแอนิเมชันย่อยคงเดิม
       tweens.forEach(tw => {
         if(!tw.elapsed) tw.elapsed = 0;
-        tw.elapsed += dt * (appMode === "LIVE" ? speeds[speedIdx] : 1.0);
-        const progress = Math.min(tw.elapsed / 1.0, 1.0); // ยึดฐานเวลา 1 วินาทีสเกลตามเว็บนิว
+        tw.elapsed += dt * speeds[speedIdx];
+        const progress = Math.min(tw.elapsed / 1.0, 1.0);
         tw.update(progress);
       });
 
       controls.update();
       renderer.render(scene, camera);
     }
-
-    // เริ่มต้นเชื่อมต่อเครือข่ายและรันกราฟิก
-    connectGateway();
     requestAnimationFrame(animLoop);
 
     window.addEventListener('resize', () => {
