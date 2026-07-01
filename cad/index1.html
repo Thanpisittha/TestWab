@@ -142,6 +142,10 @@
     </div>
   </div>
 
+  <div id="aiWarningBox" style="display:none; background:rgba(248,113,113,0.15); border:1px solid var(--red); color:var(--red); padding:10px; margin: 0 14px 10px 14px; border-radius:8px; font-size:11px; font-weight:bold; line-height:1.4;">
+    ⚠️ [AI Warning Active]
+  </div>
+
   <div class="ctrl">
     <div class="btn-row" style="margin-bottom: 2px;">
       <button class="btn active-mode" id="btnModeAuto" onclick="switchMode('auto')">🤖 Auto</button>
@@ -273,7 +277,7 @@ function ret(role,durSec=0.18){
 }
 function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
 
-// ── 🎬 แอนิเมชันคุมตามจังหวะกลไกของนิว (คงพิกัดฟีดของเดิมไว้ 100%) ──
+// ── 🎬 แอนิเมชันพิกัดดั้งเดิมของนิว (ถูกต้อง แม่นยำ ไม่เพี้ยน) ──
 function playAnim(id){
   const S = speedMul;
   const sealMesh = meshMap['sealing_head'];
@@ -281,7 +285,6 @@ function playAnim(id){
 
   switch(id){
     case 'FEED_CARRIER':
-      // ลอจิกสายพานขยับเลื่อน และล้อ Roll_1 หมุนขับเคลื่อนที่ถูกต้องสมบูรณ์ของนิว
       twRot('roller_feed', -Math.PI * 2.5, 1.2/S, 'x'); 
       twRot('feeder_block', -Math.PI * 2.5, 1.2/S, 'z'); 
 
@@ -295,7 +298,6 @@ function playAnim(id){
       break;
 
     case 'SEAL_PROCESS':
-      // หัวซีลสับกดลงและยกตัวคืนนุ่มนวล
       if(sealMesh && origPos['sealing_head']){
         const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.5, 0));
         twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 0.6/S, () => {
@@ -305,7 +307,6 @@ function playAnim(id){
       break;
 
     case 'TAKEUP_REEL':
-      // ล้อ Roll_2 ม้วนเก็บงาน
       twRot('roller_blue', Math.PI * 2.5, 1.0/S, 'x'); 
       break;
 
@@ -325,7 +326,6 @@ function animate(){
   
   for(let i=tweens.length-1;i>=0;i--){
     const t=tweens[i]; t.elapsed+=dt;
-    
     const currentDuration = t.dur || 1.0;
     const p=Math.min(t.elapsed/currentDuration,1), ep=ease(p);
     
@@ -433,7 +433,7 @@ function setIO(ipBits, opBits) {
   for(let i=0; i<5; i++){
     const el = document.getElementById(`op${i}`);
     if(el){
-      if(ipBits & (1<<i)) el.classList.add('active');
+      if(opBits & (1<<i)) el.classList.add('active');
       else el.classList.remove('active');
     }
   }
@@ -461,6 +461,7 @@ window.fsmReset = function(){
   });
   document.getElementById('ovState').textContent = 'READY';
   current = 'READY';
+  document.getElementById("aiWarningBox").style.display = "none";
 };
 
 // ==================================================
@@ -574,6 +575,15 @@ function initWebSocket() {
         document.getElementById('ovDesc').textContent = s?.action || '';
         document.getElementById('ovState').classList.toggle('inspect-mode', (s?.isCheck && isSemiAutoMode));
         
+        // 🤖 🚨 ดักจับพารามิเตอร์ทำนายความเสี่ยงเชิงป้องกัน (Predictive Maintenance AI)
+        const warningBox = document.getElementById("aiWarningBox");
+        if (sys.predictive_warning && sys.predictive_warning !== "") {
+            warningBox.style.display = "block";
+            warningBox.innerText = sys.predictive_warning;
+        } else {
+            warningBox.style.display = "none";
+        }
+
         const dot = document.getElementById('hdot'), hs = document.getElementById('hstatus');
         if (!running) {
           dot.className = 'hdot'; hs.textContent = 'Idle';
