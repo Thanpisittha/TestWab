@@ -19,196 +19,692 @@
       display:grid;grid-template-columns:1fr 320px;grid-template-rows:48px 1fr;height:100vh;overflow:hidden}
     header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:0 16px;
       background:var(--surface);border-bottom:1px solid var(--border)}
-    .brand{font-weight:700;font-size:14px;letter-spacing:0.5px;display:flex;align-items:center;gap:8px}
-    .brand span{color:var(--teal)}
-    main{position:relative;background:#0d0f14}
-    #c3d{width:100%;height:100%}
-    .overlay-hud{position:absolute;top:12px;left:12px;background:rgba(17,19,24,0.85);
-      padding:12px 16px;border-radius:6px;border:1px solid var(--border);backdrop-filter:blur(4px);
-      pointer-events:none;display:flex;flex-direction:column;gap:4px}
-    .hud-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600}
-    .hud-val{font-size:20px;font-weight:700;font-family:monospace;color:var(--teal)}
-    .hud-status-node{display:flex;align-items:center;gap:6px;margin-top:2px}
-    .hdot{width:8px;height:8px;border-radius:50%;background:#ef4444;transition:background 0.3s}
-    .hdot.online{background:var(--teal);box-shadow:0 0 8px var(--teal)}
-    .hdot.replay-mode{background:var(--purple);box-shadow:0 0 8px var(--purple)}
-    #hstatus{font-size:12px;font-weight:600;color:var(--text)}
+    .logo{font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--teal)}
+    .htitle{font-size:12px;color:var(--muted)}
+    .hdot{width:8px;height:8px;border-radius:50%;background:#4b5563;transition:background .3s}
+    .hdot.run{background:var(--teal);box-shadow:0 0 6px var(--teal)}
+    .hdot.inspect{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+    .hdot.replay-mode{background:var(--purple);box-shadow:0 0 6px var(--purple)}
+    #hstatus{font-size:12px;color:var(--muted);margin-left:6px;margin-right:16px}
     
-    sidebar{background:var(--surface);border-left:1px solid var(--border);padding:16px;
-      display:flex;flex-direction:column;gap:14px;overflow-y:auto}
-    .panel{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;
-      display:flex;flex-direction:column;gap:8px}
-    .panel-h{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--muted);
-      margin-bottom:2px;display:flex;justify-content:space-between;align-items:center}
-    .panel-h span{font-family:monospace;color:var(--text);background:var(--border);padding:2px 6px;border-radius:3px;font-size:9px}
-    
-    .btn{background:var(--border);color:var(--text);border:none;padding:8px 12px;border-radius:4px;
-      font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
-      gap:6px;transition:all 0.15s ease;width:100%}
-    .btn:hover{filter:brightness(1.15)}
-    .btn:disabled{opacity:0.3;cursor:not-allowed;filter:none}
-    .btn-primary{background:var(--teal);color:#05070a}
-    .btn-danger{background:var(--red);color:#05070a}
-    
-    .grid-io{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
-    .si{background:var(--surface);border:1px solid var(--border);padding:4px 2px;border-radius:4px;
-      text-align:center;font-size:9px;font-weight:700;color:var(--muted);transition:all 0.15s}
-    .si.active.ip{background:rgba(251,191,36,0.15);color:var(--amber);border-color:var(--amber);box-shadow:0 0 4px rgba(251,191,36,0.2)}
-    .si.active.op{background:rgba(0,201,167,0.15);color:var(--teal);border-color:var(--teal);box-shadow:0 0 4px rgba(0,201,167,0.2)}
-    
-    .log-box{height:150px;background:var(--surface);border:1px solid var(--border);border-radius:4px;
-      padding:6px;overflow-y:auto;font-family:monospace;font-size:11px;display:flex;flex-direction:column;gap:4px;flex:1}
-    .log-ln{line-height:1.3;color:#9ca3af}
-    .log-ln.sys{color:var(--purple)}
-    .log-ln.ok{color:var(--teal)}
-    .log-ln.err{color:var(--red)}
-    .log-ln.warn{color:var(--amber)}
+    .home-btn{
+      display:flex;align-items:center;justify-content:center;
+      font-size:16px;color:var(--muted);text-decoration:none;
+      width:32px;height:32px;border-radius:6px;border:1px solid transparent;
+      margin-left:auto;cursor:pointer;transition:all .2s;
+    }
+    .home-btn:hover{
+      color:var(--teal);background:var(--surface2);border-color:var(--border);
+    }
 
-    /* ⏳ สไตล์ปุ่มและสไลเดอร์โหมด Replay */
-    .mode-tabs { display: flex; gap: 4px; margin-bottom: 4px; }
-    .tab-btn { flex: 1; padding: 6px; font-size: 10px; font-weight: bold; background: var(--surface); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; cursor: pointer; }
-    .tab-btn.active-live { background: var(--teal); color: #000; border-color: var(--teal); }
-    .tab-btn.active-rep { background: var(--purple); color: #fff; border-color: var(--purple); }
-    .slider-style { width: 100%; margin: 6px 0; -webkit-appearance: none; background: var(--border); height: 4px; border-radius: 2px; outline: none; }
-    .slider-style::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--purple); cursor: pointer; }
+    #canvas-wrap{position:relative;background:#06080a}
+    canvas{display:block;width:100%;height:100%}
+    .overlay{position:absolute;top:12px;left:12px;background:rgba(10,12,15,.88);
+      border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:220px}
+    .ov-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+    .ov-state{font-size:20px;font-weight:700;color:var(--teal);line-height:1.1;transition:color .3s}
+    .ov-state.inspect-mode{color:var(--amber)}
+    .ov-state.replay-title{color:var(--purple)}
+    .ov-desc{font-size:11px;color:var(--muted);margin-top:3px}
+    .anim-tag{position:absolute;bottom:12px;left:12px;background:rgba(251,191,36,.15);
+      border:1px solid var(--amber);border-radius:7px;padding:5px 12px;font-size:11px;color:var(--amber);display:none}
+    .panel{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+    .ctrl{padding:14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+    .btn-row{display:flex;gap:6px}
+    .btn{flex:1;padding:8px;border:1px solid var(--border);border-radius:7px;font-size:11px;
+      font-weight:600;cursor:pointer;background:var(--surface2);color:var(--text);transition:all .2s}
+    .btn:hover{border-color:var(--teal);color:var(--text)}
+    .btn.primary{background:rgba(0,201,167,.12);color:var(--teal);border-color:var(--teal)}
+    .btn.danger{background:rgba(248,113,113,.12);color:var(--red);border-color:var(--red)}
+    .btn.active-mode{background:var(--teal);color:#000;border-color:var(--teal)}
+    .btn.ok-btn{background:rgba(0,201,167,0.2);color:var(--teal);border-color:var(--teal);font-size:12px}
+    .btn.ok-btn:hover{background:var(--teal);color:#000}
+    .btn.ng-btn{background:rgba(248,113,113,0.2);color:var(--red);border-color:var(--red);font-size:12px}
+    .btn.ng-btn:hover{background:var(--red);color:#000}
+    .btn:disabled{opacity:.15;cursor:not-allowed;pointer-events:none}
+    .speed-row{display:flex;align-items:center;gap:8px}
+    .slbl{font-size:11px;color:var(--muted);white-space:nowrap}
+    input[type=range]{flex:1;accent-color:var(--teal)}
+    .sval{font-size:11px;color:var(--teal);min-width:22px;text-align:right}
+    .counters{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+    .cnt{flex:1;padding:10px;text-align:center;border-right:1px solid var(--border)}
+    .cnt-child{border-right:none}
+    .cnt-val{font-size:18px;font-weight:700;color:var(--teal)}
+    .cnt-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:1px}
+    .sec-title{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:10px 14px 4px}
+    .states{flex:1;overflow-y:auto;padding:0 8px 8px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+    .si{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;margin-bottom:2px;transition:background .2s}
+    .si.active{background:rgba(0,201,167,.1)}
+    .si.active.inspecting{background:rgba(251,191,36,.12)}
+    .si.visited{background:rgba(255,255,255,.02)}
+    .si-dot{width:7px;height:7px;border-radius:50%;background:#2a2d38;flex-shrink:0;transition:background .3s}
+    .si.active .si-dot{background:var(--teal);box-shadow:0 0 5px var(--teal)}
+    .si.active.inspecting .si-dot{background:var(--amber);box-shadow:0 0 5px var(--amber)}
+    .si.visited .si-dot{background:var(--purple)}
+    .si-name{font-size:10px;font-weight:600;color:var(--muted);min-width:105px;transition:color .2s}
+    .si.active .si-name{color:var(--teal)}
+    .si.active.inspecting .si-name{color:var(--amber)}
+    .si.visited .si-name{color:var(--text)}
+    .si-action{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .log-wrap{border-top:1px solid var(--border);height:145px;display:flex;flex-direction:column;flex-shrink:0}
+    .log-hdr{padding:6px 14px;display:flex;justify-content:space-between;align-items:center}
+    .log-clr{font-size:10px;color:var(--muted);cursor:pointer}.log-clr:hover{color:var(--text)}
+    .log-body{flex:1;overflow-y:auto;padding:0 14px 8px;font-family:monospace;font-size:10px;
+      line-height:1.7;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+    .le .ts{color:#4b5563;margin-right:5px}
+    .le.info .ev{color:var(--teal)}.le.warn .ev{color:var(--amber)}.le.err .ev{color:var(--red)}.le.sys .ev{color:var(--purple)}
+
+    /* ⏳ สไตล์ปุ่มและแผงควบคุม Time Machine (สไตล์ดาร์กแมตช์ธีมเดิม) */
+    .tm-panel { background:var(--surface2); border:1px solid var(--border); padding:10px; border-radius:8px; display:flex; flex-direction:column; gap:6px; margin: 0 14px 10px 14px; }
+    .tm-tabs { display:flex; gap:4px; }
+    .tm-btn { flex:1; padding:6px; font-size:10px; font-weight:bold; background:var(--surface); border:1px solid var(--border); color:var(--muted); border-radius:5px; cursor:pointer; transition:all 0.2s; }
+    .tm-btn.active-live { background:rgba(0,201,167,0.15); color:var(--teal); border-color:var(--teal); }
+    .tm-btn.active-rep { background:rgba(167,139,250,0.15); color:var(--purple); border-color:var(--purple); }
+    .tm-slider { width:100%; margin:4px 0; -webkit-appearance:none; background:var(--border); height:4px; border-radius:2px; outline:none; }
+    .tm-slider::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--purple); cursor:pointer; }
   </style>
 </head>
 <body>
+<header>
+  <span class="logo">Demo</span>
+  <span style="color:var(--border)">|</span>
+  <span class="htitle">SMD Reel Packing — Dual Mode Control Dashboard</span>
+  
+  <a href="index.html" class="home-btn" title="กลับหน้าหลัก (Home)">🏠</a>
+  
+  <div class="hdot" id="hdot"></div>
+  <span id="hstatus">Idle</span>
+</header>
 
-  <header>
-    <div class="brand">📦 STATION TWIN — <span>OP-PACK05</span></div>
-  </header>
+<div id="canvas-wrap">
+  <canvas id="c"></canvas>
+  <div class="overlay">
+    <div class="ov-label" id="ovLabel">Current State</div>
+    <div class="ov-state" id="ovState">READY</div>
+    <div class="ov-desc" id="ovDesc">Waiting for Start</div>
+  </div>
+  <div class="anim-tag" id="animTag">⟳ Animating</div>
+</div>
 
-  <main>
-    <div id="c3d"></div>
-    <div class="overlay-hud">
-      <div class="hud-title">Current Machine State</div>
-      <div id="ovLabel" class="hud-val">IDLE</div>
-      <div class="hud-status-node">
-        <div id="hdot" class="hdot"></div>
-        <span id="hstatus">Idle</span>
+<div class="panel">
+  <div class="sec-title" style="padding-top:14px">⏳ Digital Twin Time Machine</div>
+  <div class="tm-panel">
+    <div class="tm-tabs">
+      <button id="tmLiveBtn" class="tm-btn active-live" onclick="switchTwinMode('LIVE')">🔴 LIVE SYNC</button>
+      <button id="tmRepBtn" class="tm-btn" onclick="switchTwinMode('REPLAY')">⏳ REPLAY SQL</button>
+    </div>
+    <div id="tmSubPanel" style="display:none; flex-direction:column; gap:4px;">
+      <button class="btn" style="padding:4px; font-size:10px;" onclick="loadSqlHistory()">🔄 Load Log from SQL</button>
+      <input type="range" id="tmSlider" class="tm-slider" min="0" max="0" value="0" oninput="slideHistory(this.value)">
+      <div style="display:flex; justify-content:between; font-size:9px; color:var(--muted); font-family:monospace;">
+        <span id="tmStartT">-</span>
+        <span id="tmEndT">-</span>
       </div>
     </div>
-  </main>
+  </div>
 
-  <sidebar>
-    <div class="panel">
-      <div class="panel-h">⏳ DIGITAL TWIN TIME MACHINE</div>
-      <div class="mode-tabs">
-        <button id="mode-live-btn" class="tab-btn active-live" onclick="switchTwinMode('LIVE')">🔴 LIVE MONITOR</button>
-        <button id="mode-rep-btn" class="tab-btn" onclick="switchTwinMode('REPLAY')">⏳ REPLAY SQL</button>
-      </div>
-      <div id="replay-sub-panel" style="display: none; flex-direction: column; gap: 4px;">
-        <button class="btn" style="background: var(--surface); font-size: 11px; padding: 4px;" onclick="loadSqlHistory()">🔄 Load Log from SQL</button>
-        <input type="range" id="rep-slider" class="slider-style" min="0" max="0" value="0" oninput="slideHistory(this.value)">
-        <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); font-family: monospace;">
-          <span id="rep-start-t">-</span>
-          <span id="rep-end-t">-</span>
-        </div>
-      </div>
+  <div class="ctrl">
+    <div class="btn-row" style="margin-bottom: 2px;">
+      <button class="btn active-mode" id="btnModeAuto" onclick="switchMode('auto')">🤖 Auto</button>
+      <button class="btn" id="btnModeSemi" onclick="switchMode('semi')">🕹️ Semi-Auto</button>
+    </div>
+    
+    <div class="btn-row">
+      <button class="btn primary" id="btnStart" onclick="fsmStart()">▶ Start</button>
+      <button class="btn danger" id="btnReset" onclick="fsmReset()" disabled>↺ Reset</button>
+    </div>
+    
+    <div class="sec-title" style="padding:4px 0 2px 0; font-size:9px">Inspection Decision (Semi-Auto Mode)</div>
+    <div class="btn-row">
+      <button class="btn ok-btn" id="btnOK" onclick="fsmDecision(true)" disabled>👍 OK</button>
+      <button class="btn ng-btn" id="btnNG" onclick="fsmDecision(false)" disabled>👎 NG</button>
     </div>
 
-    <div class="panel">
-      <div class="panel-h">📦 AUTOMATION CONTROLLER</div>
-      <button id="btnStart" class="btn btn-primary" onclick="fsmStart()">▶ START SYSTEM</button>
+    <div class="speed-row">
+      <span class="slbl">Auto Speed</span>
+      <input type="range" id="spd" min="0.5" max="3" step="0.5" value="1"
+        oninput="speedMul=+this.value;document.getElementById('sval').textContent=this.value+'×'">
+      <span class="sval" id="sval">1×</span>
+    </div>
+  </div>
+  
+  <div class="counters">
+    <div class="cnt"><div class="cnt-val" id="cCycles">0</div><div class="cnt-lbl">Feeds (Cycles)</div></div>
+  </div>
+  
+  <div class="sec-title">FSM Flow States</div>
+  <div class="states" id="statesList"></div>
+  
+  <div class="log-wrap">
+    <div class="log-hdr">
+      <span class="sec-title" style="padding:0">Event Log</span>
+      <span class="log-clr" onclick="document.getElementById('logBody').innerHTML=''">Clear</span>
+    </div>
+    <div class="log-body" id="logBody"></div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const PART_NAMES = {
+  carrier_tape: 'Cerrier', 
+  roller_feed:  'Roll_1', 
+  feeder_block: 'Feed_Cerrier',
+  roller_blue:  'Roll_2', 
+  sealing_head: 'Sealing', 
+};
+
+const STATES = [
+  {id:'INIT',          action:'โหลด Carrier & Cover Tape', isCheck:false},
+  {id:'READY',         action:'Power ON / ระบบพร้อมรัน', isCheck:false},
+  {id:'SET_PARAMS',    action:'กำหนด Parameter เครื่องจักร', isCheck:false},
+  {id:'INDEX',         action:'Motor 1 (Roll_1) เลื่อนฟีดสายพานเทป', isCheck:false},
+  {id:'CHECK_CARRIER', action:'[CHECK] เซนเซอร์ตรวจความถูกต้องหลุมเทป', isCheck:true},
+  {id:'LOAD_PART',     action:'หย่อนชิ้นส่วนอิเล็กทรอนิกส์ลงหลุม Carrier', isCheck:false},
+  {id:'VISION',        action:'[CHECK] กล้อง Camera 1 เช็คตำแหน่งชิ้นงาน', isCheck:true},
+  {id:'COUNT_CHECK',   action:'[CHECK] ระบบตรวจเช็คจำนวนชิ้นงานสะสม', isCheck:true},
+  {id:'FEED_COVER',    action:'ฟีดเทปใส Cover Tape ปิดหน้าชิ้นงาน', isCheck:false},
+  {id:'CHECK_TEMP',    action:'[CHECK] ตรวจสอบระดับความร้อนหัวซีล', isCheck:true},
+  {id:'SEAL_DOWN',     action:'หัวซีลสับกดลงแช่ความร้อนลึก 5 ซม.', isCheck:false},
+  {id:'SEAL_UP',       action:'หัวซีลยกตัวขึ้นคืนตำแหน่งแท่นสแตนบาย', isCheck:false},
+  {id:'VISION_QC',     action:'[CHECK] กล้อง Camera 2 ตรวจรอยซีลเทป', isCheck:true},
+  {id:'ROLL',          action:'Motor 2 (Roll_2) ม้วนเทปเก็บ (รอบคู่)', isCheck:false}
+];
+
+const TR = {
+  INIT:          {auto:'READY'},
+  READY:         {auto:'SET_PARAMS'},
+  SET_PARAMS:    {auto:'INDEX'},
+  INDEX:         {auto:'CHECK_CARRIER'},
+  CHECK_CARRIER: {auto:'LOAD_PART'},
+  LOAD_PART:     {auto:'VISION'},
+  VISION:        {auto:'COUNT_CHECK'},
+  COUNT_CHECK:   {auto:'FEED_COVER'},
+  FEED_COVER:    {auto:'CHECK_TEMP'},
+  CHECK_TEMP:    {auto:'SEAL_DOWN'},
+  SEAL_DOWN:     {auto:'SEAL_UP'},
+  SEAL_UP:       {auto:'VISION_QC'},
+  VISION_QC:     {auto:'ROLL'},
+  ROLL:          {auto:'INDEX'}
+};
+
+const DUR = { 
+  INIT:500, READY:500, SET_PARAMS:500,
+  INDEX:1000, CHECK_CARRIER:300, LOAD_PART:600, VISION:300, COUNT_CHECK:300,
+  FEED_COVER:600, CHECK_TEMP:300, SEAL_DOWN:1000, SEAL_UP:1000, VISION_QC:300, ROLL:1000 
+};
+
+window.speedMul = 1;
+const ms = id => (DUR[id]||500) / speedMul;
+
+// ── Three.js Engine Setup ──
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x06080a);
+const camera = new THREE.PerspectiveCamera(45,1,0.01,1000);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+
+scene.add(new THREE.AmbientLight(0xffffff,1.2));
+const dl = new THREE.DirectionalLight(0xffffff,1.5); dl.position.set(4,6,4); scene.add(dl);
+
+function resize(){
+  const p=canvas.parentElement;
+  renderer.setSize(p.clientWidth,p.clientHeight,false);
+  camera.aspect=p.clientWidth/p.clientHeight;
+  camera.updateProjectionMatrix();
+}
+resize();
+new ResizeObserver(resize).observe(canvas.parentElement);
+
+// ── Registry ──
+const meshMap={}, origPos={}, origMat={};
+function reg(role,mesh){
+  meshMap[role]=mesh;
+  origPos[role]=mesh.position.clone();
+  mesh._origRot = mesh.rotation.clone(); 
+}
+
+// ── Tween System ──
+const tweens=[];
+function twCustomKey(roleKey,targetMesh,fromPos,toPos,durSec,onDone=null){
+  const i=tweens.findIndex(t=>t.role===roleKey); if(i>-1) tweens.splice(i,1);
+  tweens.push({role:roleKey,mesh:targetMesh,from:fromPos.clone(),to:toPos.clone(),dur:durSec,elapsed:0,onDone});
+  document.getElementById('animTag').style.display='block';
+}
+
+function twRot(role,deltaRot,durSec,axis='x'){
+  const mesh=meshMap[role]; if(!mesh) return;
+  const key=role+'_r';
+  const i=tweens.findIndex(t=>t.role===key); if(i>-1) tweens.splice(i,1);
+  tweens.push({role:key,mesh,fromRot:mesh.rotation[axis],toRot:mesh.rotation[axis]+deltaRot,isRot:true,rotAxis:axis,dur:durSec,elapsed:0});
+  document.getElementById('animTag').style.display='block';
+}
+
+function ret(role,durSec=0.18){
+  const mesh=meshMap[role]; if(!mesh||!origPos[role]) return;
+  const i=tweens.findIndex(t=>t.role===role); if(i>-1) tweens.splice(i,1);
+  tweens.push({role,mesh,from:mesh.position.clone(),to:origPos[role].clone(),dur:durSec,elapsed:0});
+}
+function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
+
+// ── 🎬 Animation Mapping (ดั้งเดิมของนิว 100%) ──
+function playAnim(id){
+  const S = speedMul;
+  const sealMesh = meshMap['sealing_head'];
+  const tapeMesh = meshMap['carrier_tape'];
+
+  switch(id){
+    case 'INDEX':
+      twRot('roller_feed', -Math.PI * 2.5, 1.0/S, 'x'); 
+      twRot('feeder_block', -Math.PI * 2.5, 1.0/S, 'z'); 
+
+      if(tapeMesh && origPos['carrier_tape']) {
+        tapeMesh.position.copy(origPos['carrier_tape']);
+        const nextTarget = origPos['carrier_tape'].clone().add(new THREE.Vector3(0, 0, 2));
+        twCustomKey('carrier_move', tapeMesh, tapeMesh.position, nextTarget, 1.0/S, () => {
+          tapeMesh.position.copy(origPos['carrier_tape']);
+        });
+      }
+      break;
+
+    case 'SEAL_DOWN':
+      if(sealMesh && origPos['sealing_head']){
+        const downTarget = origPos['sealing_head'].clone().add(new THREE.Vector3(0, -0.5, 0));
+        twCustomKey('sealing_down', sealMesh, sealMesh.position, downTarget, 1.0/S);
+      }
+      break;
+
+    case 'SEAL_UP':
+      if(sealMesh && origPos['sealing_head']){
+        twCustomKey('sealing_up', sealMesh, sealMesh.position, origPos['sealing_head'], 1.0/S);
+      }
+      break;
+
+    case 'ROLL':
+      if (cycles % 2 === 0) {
+        addLog('⚙️ Gear Active: Roll_2 (Blue) Rotating on Even Cycle: ' + cycles, 'warn');
+        twRot('roller_blue', Math.PI * 2.5, 1.0/S, 'x'); 
+      } else {
+        addLog('⚙️ Gear Standby: Roll_2 (Blue) Idle on Odd Cycle: ' + cycles, 'info');
+      }
+      break;
+
+    case 'INIT':
+      ret('carrier_tape', 0.25/S); 
+      ret('sealing_head', 0.25/S);
+      break;
+  }
+}
+
+// ── Render Loop ──
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=clock.getDelta();
+  controls.update();
+  
+  for(let i=tweens.length-1;i>=0;i--){
+    const t=tweens[i]; t.elapsed+=dt;
+    const p=Math.min(t.elapsed/t.dur,1), ep=ease(p);
+    if(t.isRot) t.mesh.rotation[t.rotAxis||'x'] = t.fromRot + (t.toRot - t.fromRot) * ep;
+    else t.mesh.position.lerpVectors(t.from,t.to,ep);
+    if(p>=1){ if(t.onDone) t.onDone(); tweens.splice(i,1); }
+  }
+
+  if(tweens.length===0) document.getElementById('animTag').style.display='none';
+  renderer.render(scene,camera);
+}
+animate();
+
+// ── Load Model (ของนิว 100%) ──
+new GLTFLoader().load('./export/Machine.glb', gltf=>{
+  const model = gltf.scene; scene.add(model);
+  model.traverse(obj => { if(obj.isMesh) obj.castShadow = obj.receiveShadow = true; });
+
+  const box=new THREE.Box3().setFromObject(model);
+  const center=box.getCenter(new THREE.Vector3());
+  const size=box.getSize(new THREE.Vector3()).length();
+  camera.position.set(center.x + size*0.6, center.y + size*0.5, center.z + size*0.8);
+  controls.target.copy(center); controls.update();
+  
+  let feederGroup = null;
+  model.traverse(obj => {
+    if (obj.name === PART_NAMES.carrier_tape) reg('carrier_tape', obj);
+    else if (obj.name === PART_NAMES.sealing_head) reg('sealing_head', obj);
+    else if (obj.name === PART_NAMES.roller_feed) {
+      obj.geometry.computeBoundingBox();
+      const localCenter = new THREE.Vector3(); obj.geometry.boundingBox.getCenter(localCenter);
+      obj.geometry.center(); obj.updateMatrixWorld(true); localCenter.applyMatrix4(obj.matrixWorld);
+      obj.position.copy(localCenter); reg('roller_feed', obj);
+    } 
+    else if (obj.name === PART_NAMES.roller_blue) {
+      if(obj.isMesh) {
+        obj.geometry.computeBoundingBox();
+        const blueCenter = new THREE.Vector3(); obj.geometry.boundingBox.getCenter(blueCenter);
+        obj.geometry.center(); blueCenter.applyMatrix4(obj.matrixWorld);
+        obj.position.copy(blueCenter); reg('roller_blue', obj);
+      } else { reg('roller_blue', obj); }
+    }
+    else if (obj.name === PART_NAMES.feeder_block) feederGroup = obj;
+  });
+  
+  if(feederGroup) {
+    feederGroup.updateMatrixWorld(true);
+    const worldPos = new THREE.Vector3(), worldQuat = new THREE.Quaternion(), worldScale = new THREE.Vector3();
+    feederGroup.matrixWorld.decompose(worldPos, worldQuat, worldScale);
+    scene.add(feederGroup); feederGroup.position.copy(worldPos); feederGroup.quaternion.copy(worldQuat); feederGroup.scale.copy(worldScale);
+    let innerMesh = null; feederGroup.traverse(child => { if(child.isMesh && !innerMesh) innerMesh = child; });
+    if(innerMesh && innerMesh.geometry) {
+      innerMesh.geometry.computeBoundingBox();
+      const innerCenter = new THREE.Vector3(); innerMesh.geometry.boundingBox.getCenter(innerCenter);
+      innerMesh.geometry.center(); innerMesh.position.add(innerCenter); 
+      reg('feeder_block', innerMesh); 
+    } else { reg('feeder_block', feederGroup); }
+  }
+  addLog(`System Core Loaded Successfully`,'info');
+},null,err=>addLog('GLB error: '+err.message,'err'));
+
+// ── UI UI Flow Generation ──
+const sl=document.getElementById('statesList');
+STATES.forEach(s=>{
+  const el=document.createElement('div'); el.className='si'; el.id='si_'+s.id;
+  el.innerHTML=`<div class="si-dot"></div><span class="si-name">${s.id}</span><span class="si-action">${s.action}</span>`;
+  sl.appendChild(el);
+});
+
+window.addLog = function(msg,type='info'){
+  const b=document.getElementById('logBody'); const ts=new Date().toTimeString().slice(0,8);
+  const el=document.createElement('div'); el.className='le '+type;
+  el.innerHTML=`<span class="ts">${ts}</span><span class="ev">${msg}</span>`;
+  b.appendChild(el); b.scrollTop=b.scrollHeight;
+}
+
+// ==================================================
+// ⚙️ FSM CONTROL ENGINE (รักษาฟังก์ชันของนิวไว้ครบถ้วน)
+// ==================================================
+let current='READY', running=false, timer=null, isSemiAutoMode = false, stepAllowed = false, cycles=0;
+
+window.switchMode = function(mode) {
+  if (twinAppMode === "REPLAY") return; // ล็อคปุ่มไว้ถ้าอยู่โหมด Replay
+  isSemiAutoMode = (mode === 'semi');
+  document.getElementById('btnModeSemi').classList.toggle('active-mode', isSemiAutoMode);
+  document.getElementById('btnModeAuto').classList.toggle('active-mode', !isSemiAutoMode);
+  
+  if (!isSemiAutoMode) {
+    stepAllowed = false;
+    document.getElementById('btnOK').disabled = true;
+    document.getElementById('btnNG').disabled = true;
+  }
+  
+  addLog(isSemiAutoMode ? '🕹️ Semi-Auto Mode (หยุดรอสัญญาณ OK/NG ในจุดตรวจ)' : '🤖 Auto Mode (รันต่อเนื่องอัตโนมัติ)', isSemiAutoMode ? 'warn' : 'info');
+  
+  if(!isSemiAutoMode && running && stepAllowed) {
+    stepAllowed = false;
+    triggerNextTransition();
+  }
+}
+
+function setIO(ipBits, opBits) {
+  for(let i=0; i<7; i++){
+    const el = document.getElementById(`ip${i}`);
+    if(el){
+      if(ipBits & (1<<i)) el.classList.add('active');
+      else el.classList.remove('active');
+    }
+  }
+  for(let i=0; i<5; i++){
+    const el = document.getElementById(`op${i}`);
+    if(el){
+      if(opBits & (1<<i)) el.classList.add('active');
+      else el.classList.remove('active');
+    }
+  }
+}
+
+function setState(id){
+  document.querySelectorAll('.si.active').forEach(e=>{ e.classList.remove('active','inspecting'); e.classList.add('visited'); });
+  current=id;
+  const el=document.getElementById('si_'+id); 
+  const s=STATES.find(x=>x.id===id);
+  
+  if(el){
+    el.classList.remove('visited'); el.classList.add('active');
+    if(s && s.isCheck && isSemiAutoMode) el.classList.add('inspecting');
+  }
+  
+  // ปรับการแสดงผลหน้าจอกระจก HUD ตามโหมด
+  if(twinAppMode === "LIVE") {
+    document.getElementById('ovState').textContent=id; 
+    document.getElementById('ovDesc').textContent=s?.action||'';
+    document.getElementById('ovState').classList.toggle('inspect-mode', (s?.isCheck && isSemiAutoMode));
+    document.getElementById('ovState').classList.remove('replay-title');
+  }
+  
+  const dot=document.getElementById('hdot'), hs=document.getElementById('hstatus');
+  if(twinAppMode === "LIVE") {
+    if(!running) {
+      dot.className = 'hdot'; hs.textContent = 'Idle';
+    } else if (s && s.isCheck && isSemiAutoMode) {
+      dot.className = 'hdot inspect'; hs.textContent = 'Awaiting OK / NG Decision...';
+    } else {
+      dot.className = 'hdot run'; hs.textContent = 'Running';
+    }
+  }
+
+  if(id==='INDEX') { cycles++; document.getElementById('cCycles').textContent=cycles; }
+  
+  playAnim(id);
+  addLog('→ '+id, 'info');
+  
+  if(!running) return;
+
+  timer = setTimeout(() => {
+    if (s && s.isCheck && isSemiAutoMode) {
+      stepAllowed = true;
+      document.getElementById('btnOK').disabled = false;
+      document.getElementById('btnNG').disabled = false;
+      addLog(`[Awaiting] สเตต ${id} รอคำสั่งยืนยันหน้าบอร์ด ➔ กด OK เพื่อไปต่อ หรือ NG เพื่อสั่งหยุด`, 'warn');
+    } else {
+      triggerNextTransition();
+    }
+  }, ms(id));
+}
+
+function triggerNextTransition() {
+  const tr = TR[current]; if(!tr) return;
+  if(tr.auto) { clearTimeout(timer); const next = tr.auto; if(next) setState(next); }
+}
+
+window.fsmDecision = function(isPassed) {
+  if (!running || !isSemiAutoMode || !stepAllowed) return;
+  
+  stepAllowed = false;
+  document.getElementById('btnOK').disabled = true;
+  document.getElementById('btnNG').disabled = true;
+  
+  if (isPassed) {
+    addLog(`✅ Inspection OK [${current}] ➔ ผลการตรวจสอบผ่านเงื่อนไข รันสเตปถัดไป`, 'info');
+    triggerNextTransition();
+  } else {
+    running = false;
+    clearTimeout(timer);
+    document.getElementById('hdot').className = 'hdot';
+    document.getElementById('hstatus').textContent = 'STOPPED (NG TRIPPED)';
+    document.getElementById('ovLabel').textContent = "Current State";
+    document.getElementById('ovState').textContent = "🚨 CRITICAL NG ALERT";
+    document.getElementById('ovState').classList.remove('inspect-mode');
+    addLog(`❌ QUALITY ERROR [${current}]: ชิ้นงานไม่ผ่านเกณฑ์ (NG)! ตัดสัญญาณสวิตช์เครื่องจักรหยุดทันที`, 'err');
+  }
+}
+
+window.fsmStart = function(){ 
+  if(running) return; 
+  running=true; 
+  stepAllowed = false;
+  setState('INIT'); 
+  document.getElementById('btnStart').disabled=true; 
+  document.getElementById('btnReset').disabled=false; 
+};
+
+window.fsmReset = function(){
+  clearTimeout(timer); running=false; stepAllowed=false; cycles=0; document.getElementById('cCycles').textContent=0;
+  tweens.length=0;
+  Object.keys(meshMap).forEach(role=>{
+    const m=meshMap[role]; if(m && origPos[role]){ m.position.copy(origPos[role]); if(m._origRot) m.rotation.copy(m._origRot); }
+  });
+  document.getElementById('btnStart').disabled=false; document.getElementById('btnReset').disabled=true;
+  document.getElementById('btnOK').disabled=true; document.getElementById('btnNG').disabled=true;
+  document.getElementById('hdot').className='hdot'; document.getElementById('hstatus').textContent='Idle';
+  document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','visited','inspecting'));
+  document.getElementById('ovState').textContent='READY'; document.getElementById('ovLabel').textContent = "Current State";
+  document.getElementById('ovState').classList.remove('inspect-mode','replay-title'); current='READY';
+};
+
+// ==================================================
+// 🔌 3. ตัวเชื่อมต่อ WEBSOCKET & ระบบ SQL REPLAY (เสร็จสมบูรณ์)
+// ==================================================
+let ws;
+let twinAppMode = "LIVE";
+let historicalTimeline = [];
+
+window.switchTwinMode = function(targetMode) {
+  twinAppMode = targetMode;
+  const liveBtn = document.getElementById("tmLiveBtn");
+  const repBtn = document.getElementById("tmRepBtn");
+  const subPanel = document.getElementById("tmSubPanel");
+  const hdot = document.getElementById("hdot");
+  const hstatus = document.getElementById("hstatus");
+
+  if (targetMode === "LIVE") {
+    liveBtn.className = "tm-btn active-live";
+    repBtn.className = "tm-btn";
+    subPanel.style.display = "none";
+    
+    // คืนค่าหน้าจอ HUD หลักกลับมาแสดงผลปัจจุบัน
+    document.getElementById('ovLabel').textContent = "Current State";
+    document.getElementById('ovState').textContent = current;
+    document.getElementById('ovState').classList.remove('replay-title');
+    
+    if(!running) { hdot.className = 'hdot'; hstatus.textContent = 'Idle'; }
+    else { hdot.className = 'hdot run'; hstatus.textContent = 'Running'; }
+    
+    addLog("🟢 เปิดหน้าจอ Live Monitor ลิงค์พิกัดปัจจุบัน", "ok");
+  } else {
+    liveBtn.className = "tm-btn";
+    repBtn.className = "tm-btn active-rep";
+    subPanel.style.display = "flex";
+    
+    hdot.className = "hdot replay-mode";
+    hstatus.textContent = "Replay Mode Active";
+    document.getElementById('ovLabel').textContent = "⏳ Time Machine Replay";
+    document.getElementById('ovState').classList.add('replay-title');
+    
+    addLog("⏳ เปิดระบบ Time Machine ค้นหาประวัติ SQL", "sys");
+    loadSqlHistory();
+  }
+};
+
+window.loadSqlHistory = function() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "GET_HISTORY" }));
+  } else {
+    addLog("❌ ไม่สามารถดึงข้อมูลได้ เนื่องจากไม่ได้เชื่อมต่อเซิร์ฟเวอร์หลังบ้าน", "err");
+  }
+};
+
+window.slideHistory = function(val) {
+  if (historicalTimeline.length === 0) return;
+  const log = historicalTimeline[val];
+  
+  // บังคับเปลี่ยนตัวอักษรบนหน้าจอ HUD 
+  document.getElementById('ovState').textContent = log.state;
+  document.getElementById('ovDesc').textContent = `รอบสะสมที่: ${log.cycle} | เวลา: ${log.time}`;
+  
+  // สั่งเปลี่ยนสีแถบ Flows ด้านขวาให้ส่องสว่างตามอดีตแบบไม่ทำลายลูปจริง
+  document.querySelectorAll('.si').forEach(e=>e.classList.remove('active','inspecting'));
+  const el = document.getElementById('si_' + log.state);
+  if(el) el.classList.add('active');
+
+  // เล่นแอนิเมชัน 3D โครงสร้างเดิมของนิวให้หมุน/ขยับตามประวัติอดีต
+  playAnim(log.state);
+  
+  addLog(`🕒 ไทม์ไลน์อดีต [สเตป: ${log.state}] (Cycle: ${log.cycle}) เวลาบันทึก: ${log.time}`, "sys");
+};
+
+function initWebSocket() {
+  // เปิดช่องทางเชื่อมต่อไปยังเซิร์ฟเวอร์หลังบ้าน Python (พอร์ต 8765)
+  ws = new WebSocket("ws://localhost:8765");
+
+  ws.onopen = () => {
+    addLog("⚡ เชื่อมต่อเซิร์ฟเวอร์หลังบ้าน (Python Gateway + SQL) สำเร็จ", "ok");
+  };
+
+  ws.onmessage = (event) => {
+    const raw = JSON.parse(event.data);
+    
+    // ถอดรหัสคำสั่งเมื่อฝั่ง Python ค้นและส่งประวัติจากเบส SQL มาให้
+    if (raw.type === "HISTORY_RESPONSE") {
+      historicalTimeline = raw.data;
+      if (historicalTimeline.length === 0) {
+        addLog("⚠ ไม่พบข้อมูลประวัติในตาราง SQL ของเครื่องจักร", "warn");
+        return;
+      }
+
+      const slider = document.getElementById("tmSlider");
+      slider.max = historicalTimeline.length - 1;
+      slider.value = 0;
+
+      document.getElementById("tmStartT").innerText = historicalTimeline[0].time.split(" ")[1];
+      document.getElementById("tmEndT").innerText = historicalTimeline[historicalTimeline.length - 1].time.split(" ")[1];
+      addLog(`📜 โหลดประวัติสำเร็จเรียบร้อย ${historicalTimeline.length} แถวจาก SQL ดาต้าเบส`, "ok");
       
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        <button id="btnMode" class="btn" onclick="toggleMode()">โหมด: AUTO</button>
-        <button id="btnSpeed" class="btn" onclick="cycleSpeed()">ความเร็ว: 1x</button>
-      </div>
+      if(twinAppMode === "REPLAY") slideHistory(0);
+    }
+  };
 
-      <div style="background:rgba(0,0,0,0.15);padding:8px;border-radius:4px;border:1px dashed var(--border)">
-        <div class="panel-h" style="font-size:9px;margin-bottom:4px">🕹️ SEMI-AUTO CHECKPOINT DECISION</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <button id="btnOK" class="btn" style="background:#065f46;color:#a7f3d0" onclick="humanDecision(true)" disabled>👍 OK</button>
-          <button id="btnNG" class="btn" style="background:#991b1b;color:#fca5a5" onclick="humanDecision(false)" disabled>👎 NG</button>
-        </div>
-      </div>
+  ws.onclose = () => {
+    // กรณีท่อหลุด ให้ระบบพยายามเชื่อมต่อตัวเองใหม่ทุก ๆ 2 วินาทีอัตโนมัติ
+    setTimeout(initWebSocket, 2000);
+  };
+}
 
-      <button id="btnReset" class="btn btn-danger" onclick="fsmReset()" disabled>↺ RESET SYSTEM ALARM</button>
-    </div>
+// เรียกเปิดใช้งานพอร์ตเน็ตเวิร์ก
+initWebSocket();
 
-    <div class="panel">
-      <div class="panel-h">📈 PRODUCTION MONITOR</div>
-      <div style="display:flex;justify-content:space-between;font-size:12px">
-        <span style="color:var(--muted)">Cycles Completed:</span>
-        <span id="cCycles" style="font-weight:700;color:var(--teal)">0</span>
-      </div>
-    </div>
+// ==================================================
+// 🔄 RENDER LOOP (ของนิว 100%)
+// ==================================================
+let lastTime = 0;
+function animLoop(now) {
+  requestAnimationFrame(animLoop);
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
 
-    <div class="panel">
-      <div class="panel-h">🔌 DIGITAL INPUTS <span>(40011-40017)</span></div>
-      <div class="grid-io">
-        <div id="ip0" class="si ip">CARRIER</div>
-        <div id="ip1" class="si ip">LOADED</div>
-        <div id="ip2" class="si ip">VISION</div>
-        <div id="ip3" class="si ip">TEMP</div>
-        <div id="ip4" class="si ip">QC_PASS</div>
-        <div id="ip5" class="si ip">CYL_DN</div>
-        <div id="ip6" class="si ip">CYL_UP</div>
-      </div>
-    </div>
+  tweens.forEach(tw => {
+    if(!tw.elapsed) tw.elapsed = 0;
+    tw.elapsed += dt * speeds[speedIdx];
+    const progress = Math.min(tw.elapsed / 1.0, 1.0);
+    tw.update(progress);
+  });
 
-    <div class="panel">
-      <div class="panel-h">⚡ DIGITAL OUTPUTS <span>(40021-40025)</span></div>
-      <div class="grid-io">
-        <div id="op0" class="si op">M_INDEX</div>
-        <div id="op1" class="si op">M_ROLL2</div>
-        <div id="op2" class="si op">CYL_SEAL</div>
-        <div id="op3" class="si op">ALARM</div>
-        <div id="op4" class="si op">CYL_FEED</div>
-      </div>
-    </div>
+  controls.update();
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(animLoop);
 
-    <div class="panel" style="flex:1;margin-bottom:0">
-      <div class="panel-h">📝 EVENT SYSTEM LOG</div>
-      <div id="logBox" class="log-box"></div>
-    </div>
-  </sidebar>
-
-  <script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-
-    // ==================================================
-    // 📦 THREE.JS WORLD SETUP (ของนิว 100%)
-    // ==================================================
-    const container = document.getElementById('c3d');
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0d0f14);
-    scene.fog = new THREE.FogExp2(0x0d0f14, 0.015);
-
-    const camera = new THREE.PerspectiveCamera(40, container.clientWidth/container.clientHeight, 0.1, 100);
-    camera.position.set(4.5, 4.5, 6.5);
-
-    const renderer = new THREE.WebGLRenderer({ antialias:true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    container.appendChild(renderer.domElement);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.maxPolarAngle = Math.PI/2 - 0.02;
-    controls.target.set(0, 0.5, 0);
-
-    const ambientLight = new THREE.AmbientLight(0x1a202c, 1.2);
-    scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
-    dirLight.position.set(5, 8, 4);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
-    dirLight.shadow.bias = -0.001;
-    scene.add(dirLight);
-
-    const pointLight = new THREE.PointLight(0x00c9a7, 0.6, 5);
-    pointLight.position.set(0, 1.5, 0);
-    scene.add(pointLight);
-
-    const floorGeo = new THREE.PlaneGeometry(20, 20);
-    const floorMat = new THREE.MeshStandardMaterial({ color:0x0f
+window.addEventListener('resize', () => {
+  camera.aspect = container.clientWidth/container.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(container.clientWidth, container.clientHeight);
+});
+</script>
+</body>
+</html>
