@@ -48,6 +48,7 @@
     .btn:hover{filter:brightness(1.15)}
     .btn:disabled{opacity:0.3;cursor:not-allowed;filter:none}
     .btn-primary{background:var(--teal);color:#05070a}
+    .btn-danger{background:var(--red);color:#05070a}
     
     .grid-io{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
     .si{background:var(--surface);border:1px solid var(--border);padding:4px 2px;border-radius:4px;
@@ -63,7 +64,7 @@
     .log-ln.err{color:var(--red)}
     .log-ln.warn{color:var(--amber)}
 
-    /* ⏳ แผงควบคุมระบบ Replay ไทม์แมชชีน */
+    /* ⏳ สไตล์ปุ่มและสไลเดอร์โหมด Replay ที่เพิ่มเข้ามาใหม่ */
     .mode-tabs { display: flex; gap: 4px; margin-bottom: 4px; }
     .tab-btn { flex: 1; padding: 6px; font-size: 10px; font-weight: bold; background: var(--surface); border: 1px solid var(--border); color: var(--muted); border-radius: 4px; cursor: pointer; }
     .tab-btn.active-live { background: var(--teal); color: #000; border-color: var(--teal); }
@@ -129,7 +130,7 @@
 
     <div class="panel">
       <div class="panel-h">📈 PRODUCTION MONITOR</div>
-      <div style="display:flex;justify-content:between;font-size:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12px">
         <span style="color:var(--muted)">Cycles Completed:</span>
         <span id="cCycles" style="font-weight:700;color:var(--teal)">0</span>
       </div>
@@ -269,7 +270,7 @@
     meshMap['part'].visible = false;
 
     // ==================================================
-    // ⚙️ ORIGINAL FSM ENGINE LOGIC (ดั้งเดิมของนิว 100%)
+    // ⚙ defiance ORIGINAL FSM ENGINE LOGIC (ของนิว 100%)
     // ==================================================
     const STATES = [
       'INIT','READY','SET_PARAMS','INDEX','CHECK_CARRIER',
@@ -352,7 +353,7 @@
       }
       else if(current === 'INDEX') {
         delay = 1000;
-        setIO(0, 0x01); // out_motor_index (ขา 40021)
+        setIO(0, 0x01);
         meshMap['part'].visible = false;
         meshMap['carrier'].position.x = -1.0;
         tweens.push({
@@ -364,12 +365,12 @@
       }
       else if(current === 'CHECK_CARRIER') {
         delay = 500;
-        setIO(0x01, 0); // is_carrier_present (ขา 40011)
+        setIO(0x01, 0);
         meshMap['carrier'].position.x = -0.5;
       }
       else if(current === 'LOAD_PART') {
         delay = 1200;
-        setIO(0x02, 0); // is_part_loaded (ขา 40012)
+        setIO(0x02, 0);
         meshMap['part'].position.set(-0.5, 1.2, 0);
         meshMap['part'].visible = true;
         tweens.push({
@@ -380,7 +381,7 @@
       }
       else if(current === 'VISION') {
         delay = 600;
-        setIO(0x04, 0); // vision_trigger_ok (ขา 40013)
+        setIO(0x04, 0);
         meshMap['part'].position.set(-0.5, 0.43, 0);
       }
       else if(current === 'COUNT_CHECK') {
@@ -389,15 +390,15 @@
       }
       else if(current === 'FEED_COVER') {
         delay = 800;
-        setIO(0, 0x10); // out_feed_cyl (ขา 40025)
+        setIO(0, 0x10);
       }
       else if(current === 'CHECK_TEMP') {
         delay = 500;
-        setIO(0x08, 0); // temp_is_ok (ขา 40014)
+        setIO(0x08, 0);
       }
       else if(current === 'SEAL_DOWN') {
         delay = 1000;
-        setIO(0x20, 0x04); // out_seal_cyl (ขา 40023) + in_cyl_down (ขา 40016)
+        setIO(0x20, 0x04);
         tweens.push({
           update: (t) => {
             const dy = t * 0.3;
@@ -408,7 +409,7 @@
       }
       else if(current === 'SEAL_UP') {
         delay = 1000;
-        setIO(0x40, 0); // in_cyl_up (ขา 40017)
+        setIO(0x40, 0);
         tweens.push({
           update: (t) => {
             const dy = (1-t)*0.3;
@@ -419,11 +420,11 @@
       }
       else if(current === 'VISION_QC') {
         delay = 600;
-        setIO(0x10, 0); // qc_pass_signal (ขา 40015)
+        setIO(0x10, 0);
       }
       else if(current === 'ROLL') {
         delay = 1200;
-        setIO(0, 0x02); // out_motor_roll2 (ขา 40022)
+        setIO(0, 0x02);
         const startX = meshMap['carrier'].position.x;
         tweens.push({
           update: (t) => {
@@ -452,7 +453,7 @@
     window.toggleMode = function(){
       mode = (mode === 'auto') ? 'semi' : 'auto';
       document.getElementById('btnMode').textContent = `โหมด: ${mode.toUpperCase()}`;
-      addLog(`🕹️ สลับโหมดควบคุมภายในแผงวงจรเป็น: ${mode.toUpperCase()}`, 'warn');
+      addLog(`🕹️ สลับโหมดควบคุมเป็น: ${mode.toUpperCase()}`, 'warn');
       if(mode === 'auto' && timer === null && running) {
         stepAllowed = false;
         const idx = STATES.indexOf(current);
@@ -509,10 +510,11 @@
     };
 
     // ==================================================
-    // 🔌 INTEGRATED WEBSOCKET & REPLAY LAYER (Phase 6)
+    // 🔌 2. ADDED WEBSOCKET & REPLAY INTERFACE (Phase 6)
     // ==================================================
     let ws;
     let twinAppMode = "LIVE";
+    let historicalTimeline = [];
 
     window.switchTwinMode = function(targetMode) {
       twinAppMode = targetMode;
@@ -545,7 +547,7 @@
       if (historicalTimeline.length === 0) return;
       const log = historicalTimeline[val];
       
-      // แสดงข้อมูลอดีตบน UI โดยไม่พังลอจิกแอนิเมชันที่คอมพิวเตอร์กำลังรันอยู่
+      // แสดงข้อมูลอดีตในกล่องสถานะบอร์ดและกล่องล็อกขวา โดยไม่กวนลูปแอนิเมชัน
       document.getElementById('ovLabel').textContent = `[OLD] ${log.state}`;
       addLog(`🕒 Replay Event Log -> State: ${log.state} | Cycle: ${log.cycle} | Time: ${log.time}`, "sys");
     };
@@ -582,7 +584,7 @@
     initWebSocket();
 
     // ==================================================
-    // 🔄 RENDER LOOP (คงเดิมของนิว 100%)
+    // 🔄 RENDER LOOP (ของนิว 100%)
     // ==================================================
     let lastTime = 0;
     function animLoop(now) {
