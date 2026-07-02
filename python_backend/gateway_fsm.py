@@ -1,346 +1,318 @@
-import socket
-import time
-import os
-import json
 import asyncio
-import threading
+import json
 import sqlite3
-import math
-import select
+import time
 from datetime import datetime
+
+# ==================================================
+# ⚙️ CONFIGURATION & NETWORK SETTINGS
+# ==================================================
 import websockets
 
-# ==================================================
-# ⚙️ CONFIGURATION
-# ==================================================
-LOOP_DELAY      = 0.02     # 20 ms
-BASE_DIR        = os.path.dirname(os.path.abspath(__file__))
-DB_FILE         = os.path.join(BASE_DIR, "smd_packing_analytics.db")
+RUST_BRIDGE_HOST = "127.0.0.1"
+RUST_BRIDGE_PORT = 8766
+DB_FILE = "production_data.db"
 
-RUST_HOST       = "127.0.0.1"
-RUST_PORT       = 8766
-
+# 16-State ลอจิกการทำงานของนิว
 STATES = [
-    'LOAD_CARRIER', 'INDEX_CARRIER', 'POWER_ON', 'SET_PARAMS', 
-    'SENSOR_CHECK_CARRIER', 'READY', 'LOAD_PART', 'VISION', 
-    'CHECK_TEMP', 'FEED_CARRIER', 'COUNT_PROCESS', 'COUNT_CHECK', 
-    'COUNT_ACCUMULATE', 'SEAL_PROCESS', 'VISION_QC', 'TAKEUP_REEL', 'ALARM'
+    "LOAD_CARRIER", "INDEX_CARRIER", "POWER_ON", "SET_PARAMS",
+    "SENSOR_CHECK_CARRIER", "READY", "LOAD_PART", "VISION",
+    "CHECK_TEMP", "FEED_CARRIER", "COUNT_PROCESS", "COUNT_CHECK",
+    "COUNT_ACCUMULATE", "SEAL_PROCESS", "VISION_QC", "TAKEUP_REEL", "ALARM"
 ]
 
-system_data = {
+# Shared Global State
+system_state = {
     "current_state": "READY",
-    "running": False,
-    "mode": "auto",           
-    "step_allowed": False,     
     "cycles": 0,
-    "speed_mul": 1.0,
-    "ip0": 0, "ip1": 0,
-    "op0": 0, "op1": 0,
-    "camera1_count": 0,
-    "encoder_count": 0,
-    "pieces_count": 0,
-    "target_pieces": 5,
-    "predictive_warning": "" 
+    "mode": "auto",       # auto / semi
+    "running": False,
+    "step_allowed": False,
+    "speed": 1.0,
+    "ip0": 0,             # Input bits
+    "op0": 0,             # Output bits
+    "predictive_warning": "",
+    "state_start_time": time.time()
 }
 
-step_history_cache = {"FEED_CARRIER": [], "SEAL_PROCESS": []}
-connected_clients = set()
-trigger_reset_timer = False
-
-# 🚀 ตัวแปร Global สำหรับถือสายท่อ Socket ค้างไว้แบบถาวร
-rust_socket = None
-
 # ==================================================
-# 🔌 PERSISTENT SOCKET CONNECTION TO RUST
-# ==================================================
-def connect_to_rust_layer():
-    global rust_socket
-    if rust_socket is not None:
-        return True
-    try:
-        rust_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        rust_socket.settimeout(0.1)
-        rust_socket.connect((RUST_HOST, RUST_PORT))
-        print("💡 [Python -> Rust] Persistent Connection Established!")
-        return True
-    except:
-        rust_socket = None
-        return False
-
-def send_data_to_rust_layer(state_name, is_running, op0, ip0, cycles):
-    global rust_socket
-    if not connect_to_rust_layer():
-        return ip0
-        
-    try:
-        payload = json.dumps({
-            "current_state": state_name,
-            "running": is_running,
-            "op0": op0,
-            "ip0": ip0,
-            "cycles": cycles
-        }) + "\n"
-        rust_socket.sendall(payload.encode('utf-8'))
-        
-        # ดักรอฟังบิตเซนเซอร์ที่ Rust ส่งสวนกลับมา
-        ready = select.select([rust_socket], [], [], 0.02)
-        if ready[0]:
-            resp = rust_socket.recv(1024).decode('utf-8')
-            if not resp:
-                # ถ้าสายหลุด ให้สั่งเคลียร์ตัวแปรเพื่อรอบหน้าจะทำการ Reconnect ออโต้
-                rust_socket.close()
-                rust_socket = None
-                return ip0
-            data = json.loads(resp.strip())
-            return data.get("ip0", ip0)
-    except:
-        try:
-            rust_socket.close()
-        except: pass
-        rust_socket = None
-    return ip0
-
-# ==================================================
-# 🗄️ SQLITE DATABASE FUNCTIONS
+# 🗄️ DATABASE SYSTEM (SQLite Setup)
 # ==================================================
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    # สร้างตารางเก็บประวัติรายสเตป (สำหรับประมวลผลคอขวด)
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS machine_logs (
+        CREATE TABLE IF NOT EXISTS state_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            state_name TEXT NOT NULL,
-            duration_sec REAL NOT NULL,
-            control_mode TEXT NOT NULL,
-            current_cycle INTEGER NOT NULL,
-            status TEXT NOT NULL
+            cycle INTEGER,
+            state TEXT,
+            duration REAL,
+            timestamp TEXT
         )
     """)
+    # สร้างตารางสรุปเวลาของแต่ละ Cycle (สำหรับกราฟ OEE)
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS production_summary (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            end_timestamp TEXT NOT NULL,
-            cycle_number INTEGER NOT NULL,
-            total_duration_sec REAL NOT NULL
+        CREATE TABLE IF NOT EXISTS cycle_summaries (
+            cycle INTEGER PRIMARY KEY,
+            total_duration REAL,
+            timestamp TEXT
         )
     """)
     conn.commit()
     conn.close()
 
-def log_state_transition_to_sql(state_name, duration_sec, mode, cycles, status="NORMAL"):
+def log_state_to_db(cycle, state, duration):
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        cursor.execute("""
-            INSERT INTO machine_logs (timestamp, state_name, duration_sec, control_mode, current_cycle, status)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (now_str, state_name, round(duration_sec, 3), mode, cycles, status))
-        conn.commit()
-        conn.close()
-        print(f"💾 [SQL Saved] State: {state_name} | Spent: {round(duration_sec, 2)}s")
-    except Exception as e:
-        print(f"❌ DB Error: {e}")
-
-def log_cycle_complete_to_sql(cycle_number, total_duration_sec):
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        cursor.execute("""
-            INSERT INTO production_summary (end_timestamp, cycle_number, total_duration_sec)
-            VALUES (?, ?, ?)
-        """, (now_str, cycle_number, round(total_duration_sec, 2)))
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute(
+            "INSERT INTO state_logs (cycle, state, duration, timestamp) VALUES (?, ?, ?, ?)",
+            (cycle, state, duration, now)
+        )
         conn.commit()
         conn.close()
     except Exception as e:
         print(f"❌ DB Error: {e}")
 
 # ==================================================
-# 🤖 PREDICTIVE AI MODEL
+# 📊 ANALYTICS QUERY ENGINE (ท่อข้อมูลดึงไปหน้ากราฟ)
 # ==================================================
-def evaluate_predictive_ai(step_name, current_duration):
-    history = step_history_cache[step_name]
-    if len(history) < 3:
-        history.append(current_duration)
-        return False
-    mean_val = sum(history) / len(history)
-    variance = sum((x - mean_val) ** 2 for x in history) / len(history)
-    std_dev = math.sqrt(variance)
-    is_anomaly = current_duration > (mean_val + 1.5 * std_dev) or current_duration > 1.35
-    history.append(current_duration)
-    if len(history) > 5:
-        history.pop(0)
-    return is_anomaly
+def get_analytics_data():
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # 1. ดึงข้อมูลระยะเวลาของแต่ละ Cycle (กราฟเส้นประวัติราย Cycle)
+        # ดึง 20 Cycle ล่าสุดมาแสดงแนวโน้ม OEE Efficiency
+        cursor.execute("""
+            SELECT cycle, SUM(duration) as total_dur 
+            FROM state_logs 
+            GROUP BY cycle 
+            ORDER BY cycle DESC LIMIT 20
+        """)
+        rows_cycles = cursor.fetchall()
+        cycles_data = [{"cycle": r[0], "duration": round(r[1], 2)} for r in reversed(rows_cycles)]
+        
+        # 2. คำนวณหาค่าเฉลี่ยเวลาในแต่ละสเตป (กราฟแท่ง Bottleneck Analysis)
+        cursor.execute("""
+            SELECT state, AVG(duration) as avg_dur 
+            FROM state_logs 
+            GROUP BY state
+            ORDER BY avg_dur DESC
+        """)
+        rows_states = cursor.fetchall()
+        states_avg = [{"state": r[0], "avg_duration": round(r[1], 2)} for r in rows_states]
+        
+        conn.close()
+        return {"cycles_data": cycles_data, "states_avg": states_avg}
+    except Exception as e:
+        print(f"❌ Analytics Fetch Error: {e}")
+        return {"cycles_data": [], "states_avg": []}
+
+def get_raw_history():
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT cycle, state, duration, timestamp FROM state_logs ORDER BY id DESC LIMIT 100")
+        rows = cursor.fetchall()
+        conn.close()
+        return [{"cycle": r[0], "state": r[1], "duration": r[2], "time": r[3]} for r in reversed(rows)]
+    except Exception as e:
+        return []
 
 # ==================================================
-# 🧠 FSM MAIN BRAIN LOOP
+# 🤖 FSM LOGIC MACHINE (ตรรกะคำนวณสเตป 16 ขั้นของนิว)
 # ==================================================
-def fsm_brain_loop():
-    global system_data, trigger_reset_timer
-    state_index = STATES.index('READY') 
-    last_transition_time = time.time()
-    cycle_start_time = time.time()
+def change_state(new_state):
+    now = time.time()
+    duration = now - system_state["state_start_time"]
     
-    durations = {
-        'LOAD_CARRIER': 0.5, 'INDEX_CARRIER': 0.8, 'POWER_ON': 0.5, 'SET_PARAMS': 0.5,
-        'SENSOR_CHECK_CARRIER': 0.4, 'READY': 0.5, 'LOAD_PART': 0.8, 'VISION': 0.4,
-        'CHECK_TEMP': 0.4, 'FEED_CARRIER': 1.0, 'COUNT_PROCESS': 0.5, 'COUNT_CHECK': 0.5,
-        'COUNT_ACCUMULATE': 0.4, 'SEAL_PROCESS': 1.0, 'VISION_QC': 0.4, 'TAKEUP_REEL': 1.0,
-        'ALARM': 0.5
-    }
-    checkpoints = ['SENSOR_CHECK_CARRIER', 'VISION', 'CHECK_TEMP', 'COUNT_CHECK', 'VISION_QC']
+    # บันทึกสถานะเก่าลงฐานข้อมูล SQL ก่อนย้ายสเตป
+    if system_state["running"] and system_state["cycles"] > 0:
+        log_state_to_db(system_state["cycles"], system_state["current_state"], duration)
+        
+    print(f"🔄 FSM State Change: {system_state['current_state']} -> {new_state} (Spent: {duration:.2f}s)")
+    system_state["current_state"] = new_state
+    system_state["state_start_time"] = now
+    
+    # กำหนด Output Bits (OP) ไปคุมรีเลย์บนบอร์ดจริงจำลองตามสเตป
+    if new_state == "READY": system_state["op0"] = 0x01
+    elif new_state == "LOAD_PART": system_state["op0"] = 0x02
+    elif new_state == "SEAL_PROCESS": system_state["op0"] = 0x04
+    elif new_state == "FEED_CARRIER": system_state["op0"] = 0x08
+    elif new_state == "TAKEUP_REEL": system_state["op0"] = 0x10
+    else: system_state["op0"] = 0x00
 
+async def fsm_loop():
     while True:
-        try:
-            now = time.time()
-            if trigger_reset_timer:
-                state_index = STATES.index(system_data["current_state"])
-                last_transition_time = now
-                cycle_start_time = now
-                trigger_reset_timer = False
+        if not system_state["running"]:
+            await asyncio.sleep(0.5)
+            continue
+            
+        curr = system_state["current_state"]
+        S = system_state["speed"]
+        
+        # เช็คเงื่อนไขโหมดการทำงาน
+        is_inspect_state = curr in ["SENSOR_CHECK_CARRIER", "VISION", "CHECK_TEMP", "COUNT_CHECK", "VISION_QC"]
+        
+        if system_state["mode"] == "semi" and is_inspect_state and not system_state["step_allowed"]:
+            # ถ้าอยู่ในโหมด Semi-Auto และถึงจุดตรวจสอบ ให้หยุดรอการกด OK/NG จากหน้าเว็บ
+            await asyncio.sleep(0.1)
+            continue
 
-            curr = STATES[state_index]
-            system_data["current_state"] = curr
-
-            if system_data["running"] and curr != 'ALARM':
-                simulated_delay = 0.0
-                if curr in ["FEED_CARRIER", "SEAL_PROCESS"] and system_data["cycles"] in [3, 4]:
-                    simulated_delay = 0.55  
-
-                target_dur = (durations.get(curr, 0.5) + simulated_delay) / system_data["speed_mul"]
-                
-                if curr in checkpoints and system_data["mode"] == "semi" and not system_data["step_allowed"] and (now - last_transition_time >= target_dur):
-                    system_data["step_allowed"] = True
-                
-                elif not system_data["step_allowed"] and (now - last_transition_time >= target_dur):
-                    actual_spent = now - last_transition_time
-                    
-                    if curr in ["FEED_CARRIER", "SEAL_PROCESS"]:
-                        has_anomaly = evaluate_predictive_ai(curr, actual_spent)
-                        if has_anomaly:
-                            system_data["predictive_warning"] = f"⚠️ [AI WARNING]: Detected Friction at {curr} ({round(actual_spent, 2)}s)!"
-                        else:
-                            if curr == 'SEAL_PROCESS' and actual_spent < 1.3:
-                                system_data["predictive_warning"] = ""
-
-                    log_state_transition_to_sql(curr, actual_spent, system_data["mode"], system_data["cycles"])
-
-                    if curr == 'FEED_CARRIER':
-                        system_data["camera1_count"] += 1
-                        system_data["encoder_count"] += 1
-                        state_index = STATES.index('COUNT_PROCESS')
-                    elif curr == 'COUNT_CHECK':
-                        if system_data["camera1_count"] == system_data["encoder_count"]:
-                            state_index = STATES.index('COUNT_ACCUMULATE')
-                        else:
-                            state_index = STATES.index('ALARM')
-                    elif curr == 'COUNT_ACCUMULATE':
-                        system_data["pieces_count"] += 1
-                        state_index = STATES.index('SEAL_PROCESS')
-                    elif curr == 'TAKEUP_REEL':
-                        total_cycle_time = now - cycle_start_time
-                        system_data["cycles"] += 1
-                        log_cycle_complete_to_sql(system_data["cycles"], total_cycle_time)
-                        system_data["camera1_count"] = 0
-                        system_data["encoder_count"] = 0
-                        system_data["pieces_count"] = 0
-                        cycle_start_time = now
-                        state_index = STATES.index('SENSOR_CHECK_CARRIER')
-                    else:
-                        state_index = (state_index + 1) % len(STATES)
-
-                    last_transition_time = now
-
-            # IO MAPPING บิตคุมกระบอกสูบและมอเตอร์
-            OP0 = 0x00
-            if system_data["running"]:
-                if curr == 'INDEX_CARRIER':  OP0 |= 0x01  
-                elif curr == 'FEED_CARRIER': OP0 |= 0x10  
-                elif curr == 'SEAL_PROCESS': OP0 |= 0x04  
-                elif curr == 'TAKEUP_REEL':  OP0 |= 0x02  
-                elif curr == 'ALARM':        OP0 |= 0x08
-            system_data["op0"] = OP0
-
-            # 🚀 ยิงบิตสดผ่านท่อ Socket ค้างสายข้ามเลเยอร์ไปหา Rust ประมวลผลเครือข่าย
-            actual_hardware_ip0 = send_data_to_rust_layer(
-                system_data["current_state"], 
-                system_data["running"], 
-                system_data["op0"], 
-                system_data["ip0"], 
-                system_data["cycles"]
-            )
-
-            time.sleep(LOOP_DELAY)
-        except Exception as e:
-            time.sleep(0.5)
+        # ลูปกลไกสเตปการทำงานอัตโนมัติ
+        await asyncio.sleep(1.0 / S) # ขยับความเร็วตาม Slider หน้าเว็บ
+        
+        if curr == "READY":
+            system_state["cycles"] += 1
+            change_state("LOAD_PART")
+        elif curr == "LOAD_PART":
+            change_state("VISION")
+            system_state["step_allowed"] = False
+        elif curr == "VISION":
+            change_state("CHECK_TEMP")
+            system_state["step_allowed"] = False
+        elif curr == "CHECK_TEMP":
+            change_state("FEED_CARRIER")
+        elif curr == "FEED_CARRIER":
+            change_state("COUNT_PROCESS")
+        elif curr == "COUNT_PROCESS":
+            change_state("COUNT_CHECK")
+            system_state["step_allowed"] = False
+        elif curr == "COUNT_CHECK":
+            change_state("COUNT_ACCUMULATE")
+        elif curr == "COUNT_ACCUMULATE":
+            change_state("SEAL_PROCESS")
+        elif curr == "SEAL_PROCESS":
+            change_state("VISION_QC")
+            system_state["step_allowed"] = False
+        elif curr == "VISION_QC":
+            change_state("TAKEUP_REEL")
+        elif curr == "TAKEUP_REEL":
+            change_state("READY")
 
 # ==================================================
-# 🌐 WEBSOCKET BRIDGE SERVER
+# 🌐 WEBSOCKET SERVER INTERFACE (ท่อแจกจ่ายข้อมูล)
 # ==================================================
+connected_clients = set()
+
 async def ws_handler(websocket):
-    global system_data, trigger_reset_timer
     connected_clients.add(websocket)
     try:
         async for message in websocket:
             data = json.loads(message)
             action = data.get("action")
+            
             if action == "START":
-                system_data["running"] = True
-                system_data["predictive_warning"] = ""
-                trigger_reset_timer = True
+                system_state["running"] = True
+                system_state["state_start_time"] = time.time()
+                print("▶️ System Started via Dashboard")
+                
             elif action == "RESET":
-                system_data["running"] = False
-                system_data["cycles"] = 0
-                system_data["current_state"] = "READY"
-                system_data["predictive_warning"] = ""
-                trigger_reset_timer = True
+                system_state["running"] = False
+                system_state["current_state"] = "READY"
+                system_state["cycles"] = 0
+                system_state["op0"] = 0
+                print("↺ System Reset via Dashboard")
+                
             elif action == "MODE":
-                system_data["mode"] = data.get("mode", "auto")
+                system_state["mode"] = data.get("mode", "auto")
+                system_state["step_allowed"] = False
+                print(f"🕹️ Mode switched to: {system_state['mode']}")
+                
             elif action == "SPEED":
-                system_data["speed_mul"] = float(data.get("value", 1.0))
-            elif action == "GET_HISTORY":
-                try:
-                    conn = sqlite3.connect(DB_FILE)
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT state_name, duration_sec, current_cycle, control_mode, timestamp FROM machine_logs ORDER BY id DESC LIMIT 100")
-                    rows = cursor.fetchall()
-                    conn.close()
-                    await websocket.send(json.dumps({
-                        "type": "HISTORY_RESPONSE",
-                        "data": [{"state": r[0], "duration": r[1], "cycle": r[2], "mode": r[3], "time": r[4]} for r in reversed(rows)]
-                    }))
-                except: pass
+                system_state["speed"] = float(data.get("value", 1.0))
+                
             elif action == "DECISION":
-                if system_data["step_allowed"]:
-                    system_data["step_allowed"] = False
-                    trigger_reset_timer = True
-                    if data.get("value", True):
-                        state_idx = STATES.index(system_data["current_state"])
-                        system_data["current_state"] = STATES[(state_idx + 1) % len(STATES)]
-                    else:
-                        system_data["current_state"] = "ALARM"
+                # รับสัญญาณการตัดสินใจคิว Semi-Auto (👍 OK / 👎 NG)
+                passed = data.get("value", True)
+                if passed:
+                    system_state["step_allowed"] = True
+                    print("👍 Inspection PASSED")
+                else:
+                    system_state["current_state"] = "ALARM"
+                    system_state["running"] = False
+                    print("👎 Inspection FAILED! System Brake Triggered!")
+            
+            # 🚨🎯 จุดแก้ไขสำคัญ: เมื่อหน้าจอ Analytics ร้องขอข้อมูลสถิติ
+            elif action == "GET_ANALYTICS":
+                analytics_res = get_analytics_data()
+                response = {
+                    "type": "ANALYTICS_RESPONSE",
+                    "data": analytics_res
+                }
+                await websocket.send(json.dumps(response))
+                print("📊 Sent Analytics SQLite Data to dashboard")
+                
+            elif action == "GET_HISTORY":
+                history_res = get_raw_history()
+                await websocket.send(json.dumps({"type": "HISTORY_RESPONSE", "data": history_res}))
+                
     except websockets.exceptions.ConnectionClosed:
         pass
     finally:
         connected_clients.remove(websocket)
 
-async def broadcast_state():
+async def broadcast_live_sync():
     while True:
         if connected_clients:
-            try:
-                msg = json.dumps({"type": "LIVE_SYNC", "system": system_data})
-                await asyncio.gather(*[client.send(msg) for client in connected_clients], return_exceptions=True)
-            except: pass
-        await asyncio.sleep(0.05) 
+            payload = json.dumps({
+                "type": "LIVE_SYNC",
+                "system": system_state
+            })
+            await asyncio.gather(*[client.send(payload) for client in connected_clients], return_exceptions=True)
+        await asyncio.sleep(0.1) # ส่งสตรีมหาหน้าจอและบอร์ดทุก 100ms
 
-async def main_async():
+# ==================================================
+# 🦀 RUST BRIDGE TCP CONNECTOR (ท่อสายแลนบอร์ดจริง)
+# ==================================================
+async def rust_bridge_client():
+    while True:
+        try:
+            reader, writer = await asyncio.open_connection(RUST_BRIDGE_HOST, RUST_BRIDGE_PORT)
+            print("💡 [Python -> Rust] Persistent Connection Established!")
+            
+            while True:
+                # 1. ยิงสถานะปัจจุบันคุมบอร์ดส่งเข้าทางท่อ Rust
+                tx_data = {
+                    "state": system_state["current_state"],
+                    "op0": system_state["op0"],
+                    "cycles": system_state["cycles"]
+                }
+                writer.write((json.dumps(tx_data) + "\n").encode())
+                await writer.drain()
+                
+                # 2. อ่านข้อมูลอินพุตสะท้อนกลับจากปุ่มกดบนบอร์ดจริง
+                line = await reader.readline()
+                if not line:
+                    break
+                    
+                rx_data = json.loads(line.decode().strip())
+                system_state["ip0"] = rx_data.get("ip0", 0)
+                
+                await asyncio.sleep(0.05) # ความถี่สแกนสัญญาณบอร์ด 50ms
+                
+        except Exception as e:
+            print(f"⏳ Waiting for Rust Bridge socket layer... ({e})")
+            await asyncio.sleep(2.0)
+
+# ==================================================
+# 🏁 MAIN ASYNC EXECUTOR
+# ==================================================
+async def main():
     init_db()
-    threading.Thread(target=fsm_brain_loop, daemon=True).start()
-    asyncio.create_task(broadcast_state())
-    async with websockets.serve(ws_handler, "0.0.0.0", 8765):
-        await asyncio.Event().wait() 
+    print("🗄️ SQLite Engine Sync Check Complete.")
+    print("🚀 Central Python Gateway Starting on port 8765...")
+    
+    # รันทั้ง 4 งานแบบขนาน (Concurrently) เจนเนอเรชันสมบูรณ์
+    await asyncio.gather(
+        websockets.serve(ws_handler, "0.0.0.0", 8765),
+        broadcast_live_sync(),
+        fsm_loop(),
+        rust_bridge_client()
+    )
 
 if __name__ == "__main__":
-    asyncio.run(main_async())
+    asyncio.run(main())
